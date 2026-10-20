@@ -9,7 +9,11 @@
     "dev": "vite --host 0.0.0.0 --port 3016",
     "build": "vite build",
     "build:vercel": "vite build",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "cards:latin": "node scripts/fetch-latin-terms.mjs",
+    "cards:catalog": "node scripts/build-card-catalog.mjs",
+    "cards:render": "node scripts/render-cards.mjs",
+    "cards:validate": "node scripts/validate-cards.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",
@@ -48,6 +52,7 @@
     "oxfmt": "0.61.0",
     "oxlint": "1.76.0",
     "oxlint-tsgolint": "7.0.2001",
+    "playwright": "^1.58.2",
     "tailwindcss": "4.2.1",
     "typescript": "5.9.3",
     "vite": "8.0.13",

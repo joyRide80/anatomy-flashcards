@@ -22,7 +22,7 @@ npm ci
 npm run dev
 ```
 
-Open http://localhost:3016. To build the static site, run `npm run build`; the output is in `dist/`.
+Open http://localhost:3016 for flash cards. The 3D explorer is at http://localhost:3016/atlas. To build the static site, run `npm run build`; the output is in `dist/`.
 
 ## Validate
 
@@ -48,6 +48,21 @@ This is an educational explorer, not a diagnostic or surgical tool.
 Geometry is merged into batches. Per-structure GPU textures control translation, visibility, and selection, while component geometry supports accurate picking. Exploded layouts pack only the visible pieces. Rendering updates when the scene changes; orbit controls remain responsive without thousands of separate draw calls.
 
 The optional WebMCP tools expose anatomy search and inspection in compatible browsers. The visible interface works without them.
+
+## Flash cards
+
+The home page is flash cards. `/study` opens the same library. Practice muscles, bones, and ligaments with spaced repetition (SM-2 with learning steps). Learners paste or upload their own list of Latin terms; each line is matched to a structure, with fuzzy matching for typos and collective terms such as _Costae_ expanding to every member. Decks, progress, and review history are stored in the browser (IndexedDB) and can be exported as a JSON backup.
+
+Card images are pre-rendered from the 3D atlas. To regenerate them:
+
+```sh
+npm run cards:latin     # optional: refresh Latin terms (TA98 + Wikidata), needs network
+npm run cards:catalog   # build public/cards/catalog.json
+npm run cards:render    # render public/cards/img/*.webp with headless Chromium (add --force to redo all)
+npm run cards:validate
+```
+
+Latin terms come from Terminologia Anatomica 1998 (via [ta98-sqlite](https://github.com/mhalle/ta98-sqlite)) and Wikidata, with rules for numbered series such as ribs, vertebrae, and phalanges. BodyParts3D models few ligaments, so the ligament set is small.
 
 ## Rebuilding geometry
 
