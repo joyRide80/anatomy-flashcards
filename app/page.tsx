@@ -66,6 +66,7 @@ export default function Home() {
     [error, setError] = useState(""),
     [panel, setPanel] = useState<"layers" | "search" | null>(null),
     [details, setDetails] = useState(false),
+    [studyExplore, setStudyExplore] = useState(false),
     [about, setAbout] = useState(false),
     [query, setQuery] = useState(""),
     [chosen, setChosen] = useState<Concept | null>(null);
@@ -76,6 +77,7 @@ export default function Home() {
     setAtlas(null);
     setChosen(null);
     setDetails(false);
+    setStudyExplore(false);
     setState({ ...initial, visible: DEFAULT_VISIBLE });
     fetch("/models/atlas.json", { signal: abort.signal })
       .then((r) => {
@@ -92,6 +94,7 @@ export default function Home() {
             ?.split(",")
             .filter((id) => data.parts.some((p) => p.id === id));
         if (ids?.length) {
+          const fromStudy = params.get("study") === "1";
           const first = data.parts.find((p) => p.id === ids[0])!,
             focus =
               params
@@ -99,6 +102,7 @@ export default function Home() {
                 ?.split(",")
                 .filter((id) => ids.includes(id)) ?? [],
             frame = focus.length ? focus : ids;
+          setStudyExplore(fromStudy);
           setChosen({
             id: first.conceptId,
             name: params.get("name") ?? first.name,
@@ -111,7 +115,7 @@ export default function Home() {
             context: studyContext(data, ids, frame),
             frame,
           }));
-          setDetails(true);
+          setDetails(fromStudy ? false : true);
         }
       })
       .catch((e) => {
@@ -238,6 +242,7 @@ export default function Home() {
     }));
     setChosen(null);
     setDetails(false);
+    setStudyExplore(false);
     setPanel(null);
   };
   const openPanel = (next: "layers" | "search") => {
@@ -245,13 +250,13 @@ export default function Home() {
     setPanel((p) => (p === next ? null : next));
   };
   return (
-    <main className="studio">
+    <main className={`studio${studyExplore ? " study-explore" : ""}`}>
       {atlas && (
         <AnatomyScene
           atlas={atlas}
           state={{
             ...state,
-            inspectorOpen: details && selectedParts.length > 0,
+            inspectorOpen: !studyExplore && details && selectedParts.length > 0,
           }}
           onSelect={choosePart}
           onProgress={(n) => {
@@ -547,54 +552,56 @@ export default function Home() {
         </span>
         <span className="caption-line" />
       </div>
-      <div className="bottom-dock glass">
-        <Button
-          variant="ghost"
-          className="mobile-only dock-layers"
-          onClick={() => openPanel("layers")}
-          aria-label="Open system layers"
-        >
-          <Layers3 size={20} />
-          <span>Systems</span>
-        </Button>
-        <div className="explode-control">
-          <div className="explode-label">
-            <label id="explode-label">Explode anatomy</label>
-            <output>
-              {Math.round(state.explode * 100)}
-              <span>%</span>
-            </output>
+      {!studyExplore && (
+        <div className="bottom-dock glass">
+          <Button
+            variant="ghost"
+            className="mobile-only dock-layers"
+            onClick={() => openPanel("layers")}
+            aria-label="Open system layers"
+          >
+            <Layers3 size={20} />
+            <span>Systems</span>
+          </Button>
+          <div className="explode-control">
+            <div className="explode-label">
+              <label id="explode-label">Explode anatomy</label>
+              <output>
+                {Math.round(state.explode * 100)}
+                <span>%</span>
+              </output>
+            </div>
+            <Slider
+              aria-labelledby="explode-label"
+              min={0}
+              max={100}
+              step={1}
+              value={[state.explode * 100]}
+              onValueChange={(v) =>
+                setState((s) => ({
+                  ...s,
+                  explode: (Array.isArray(v) ? v[0] : v) / 100,
+                  view: (Array.isArray(v) ? v[0] : v) > 80 ? "front" : s.view,
+                  rotate: false,
+                }))
+              }
+            />
+            <div className="slider-endpoints">
+              <span>Assembled</span>
+              <span>Every piece</span>
+            </div>
           </div>
-          <Slider
-            aria-labelledby="explode-label"
-            min={0}
-            max={100}
-            step={1}
-            value={[state.explode * 100]}
-            onValueChange={(v) =>
-              setState((s) => ({
-                ...s,
-                explode: (Array.isArray(v) ? v[0] : v) / 100,
-                view: (Array.isArray(v) ? v[0] : v) > 80 ? "front" : s.view,
-                rotate: false,
-              }))
-            }
-          />
-          <div className="slider-endpoints">
-            <span>Assembled</span>
-            <span>Every piece</span>
-          </div>
+          <Button
+            variant="ghost"
+            className="dock-reset"
+            onClick={reset}
+            aria-label="Assemble and reset"
+          >
+            <RotateCcw size={18} />
+            <span>Reset</span>
+          </Button>
         </div>
-        <Button
-          variant="ghost"
-          className="dock-reset"
-          onClick={reset}
-          aria-label="Assemble and reset"
-        >
-          <RotateCcw size={18} />
-          <span>Reset</span>
-        </Button>
-      </div>
+      )}
       <footer className="studio-footer">
         <span>
           {state.explode > 0.8 ? "Drag to pan" : "Drag to orbit"} <b>·</b> Pinch
@@ -635,7 +642,7 @@ export default function Home() {
         </div>
       )}
       <Sheet
-        open={details && selectedParts.length > 0}
+        open={!studyExplore && details && selectedParts.length > 0}
         modal={false}
         disablePointerDismissal
         onOpenChange={setDetails}

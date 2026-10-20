@@ -23,6 +23,7 @@ export function explorerHref(s: Structure) {
   const params = new URLSearchParams({
     parts: s.parts.join(","),
     name: s.en,
+    study: "1",
   });
   if (s.focus.length) params.set("focus", s.focus.join(","));
   return `/atlas?${params}`;

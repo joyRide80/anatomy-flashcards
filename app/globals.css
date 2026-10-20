@@ -1888,6 +1888,16 @@ h1 .edition {
   }
 }
 
+/* Flash-card “Explore in 3D”: full-height viewport without dock or detail sheet. */
+.studio.study-explore .scene-caption {
+  bottom: max(20px, env(safe-area-inset-bottom));
+}
+@media (max-width: 767px) {
+  .studio.study-explore .scene-caption {
+    bottom: max(16px, env(safe-area-inset-bottom));
+  }
+}
+
 /* Phone chrome: the title, camera bar, systems sheet, and footer must not cover each other. */
 @media (max-width: 380px) {
   .identity {
