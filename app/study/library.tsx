@@ -8,6 +8,7 @@ import type {
   Deck,
   DeckProgress,
 } from "@/lib/flashcards/types";
+import { PREFILL_LISTS, prefillItems } from "./lists";
 import { CATEGORY_LABEL } from "./shared";
 
 export function Library({
@@ -17,6 +18,7 @@ export function Library({
   onStudy,
   onCreate,
   onPreset,
+  onPrefill,
   onUpdate,
   onDelete,
   onExport,
@@ -28,6 +30,7 @@ export function Library({
   onStudy: (deck: Deck) => void;
   onCreate: () => void;
   onPreset: (category: Category) => void;
+  onPrefill: (name: string) => void;
   onUpdate: (deck: Deck) => void;
   onDelete: (deck: Deck) => void;
   onExport: () => void;
@@ -49,11 +52,6 @@ export function Library({
         <h2>
           Learn the body <em>by its Latin names.</em>
         </h2>
-        <p>
-          Upload your course list of muscles, bones, and ligaments. Each term is
-          matched to the 3D atlas and becomes a card with a rendered view of the
-          structure, scheduled with spaced repetition.
-        </p>
         <div className="intro-actions">
           <button type="button" className="action" onClick={onCreate}>
             <Plus size={16} /> New deck from your Latin list
@@ -68,6 +66,18 @@ export function Library({
             >
               All {CATEGORY_LABEL[c].toLowerCase()}s{" "}
               <small>{sizes[c] ?? 0}</small>
+            </button>
+          ))}
+          <span className="or">or a region</span>
+          {PREFILL_LISTS.map((list) => (
+            <button
+              key={list.name}
+              type="button"
+              className="ghost"
+              onClick={() => onPrefill(list.name)}
+            >
+              {list.name}{" "}
+              <small>{prefillItems(catalog, list.name).length}</small>
             </button>
           ))}
         </div>

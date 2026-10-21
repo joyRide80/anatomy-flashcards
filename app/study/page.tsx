@@ -20,6 +20,7 @@ import { CreateDeck } from "./create-deck";
 import { Library } from "./library";
 import { prepareVoices } from "./speech";
 import { Session } from "./session";
+import { prefillItems } from "./lists";
 import { CATEGORY_LABEL, latinName } from "./shared";
 
 type Screen =
@@ -83,6 +84,12 @@ export default function StudyPage() {
       .filter((s) => s.category === category && s.images.length)
       .map((s) => ({ structureId: s.id, label: latinName(s) }));
     create(`All ${CATEGORY_LABEL[category].toLowerCase()}s`, items).catch(fail);
+  };
+
+  const prefill = (name: string) => {
+    if (!catalog) return;
+    const items = prefillItems(catalog, name);
+    if (items.length) create(name, items).catch(fail);
   };
 
   const study = async (deck: Deck) => {
@@ -153,6 +160,7 @@ export default function StudyPage() {
             onStudy={study}
             onCreate={() => setScreen({ name: "create" })}
             onPreset={preset}
+            onPrefill={prefill}
             onUpdate={(d) => saveDeck(d).then(refresh).catch(fail)}
             onDelete={(d) => deleteDeck(d.id).then(refresh).catch(fail)}
             onExport={() => download().catch(fail)}
