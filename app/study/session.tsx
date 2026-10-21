@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowUpRight, Volume2 } from "lucide-react";
+import { ArrowLeft, Volume2 } from "lucide-react";
 import {
-  counts,
   formatInterval,
   introduce,
   nextDue,
@@ -18,6 +17,7 @@ import type {
   ReviewLog,
 } from "@/lib/flashcards/types";
 import { canSpeak, prepareVoices, speakTerms, stopSpeaking } from "./speech";
+import { SwipeCard, type Recall } from "./swipe-card";
 import {
   CATEGORY_LABEL,
   Plate,
@@ -26,13 +26,6 @@ import {
   explorerHref,
   latinName,
 } from "./shared";
-
-const GRADES: { grade: Grade; label: string; key: string }[] = [
-  { grade: "again", label: "Again", key: "1" },
-  { grade: "hard", label: "Hard", key: "2" },
-  { grade: "good", label: "Good", key: "3" },
-  { grade: "easy", label: "Easy", key: "4" },
-];
 
 function currentDay(p: DeckProgress): DeckProgress {
   const day = studyDay();
@@ -65,15 +58,12 @@ export function Session({
     () => items.map((i) => maps.structures.get(i.structureId)!),
     [items, maps],
   );
-  const figureOf = useMemo(
-    () => new Map(items.map((i, n) => [i.structureId, n + 1])),
-    [items],
-  );
-
   const [progress, setProgress] = useState(() => currentDay(initial));
   const [now, setNow] = useState(() => Date.now());
   const [lastId, setLastId] = useState<string>();
   const [revealed, setRevealed] = useState(false);
+  const [round, setRound] = useState(0);
+  const [nudge, setNudge] = useState<Recall | null>(null);
   const [viewChoice, setViewChoice] = useState<{ id: string; index: number }>();
   const [error, setError] = useState("");
   const [speaking, setSpeaking] = useState(false);
@@ -84,7 +74,6 @@ export function Session({
     () => pickNext(structures, progress.cards, now, newRemaining, lastId),
     [structures, progress, now, newRemaining, lastId],
   );
-  const tally = counts(structures, progress.cards, now, newRemaining);
   const structure = next?.structure;
   const item = structure ? itemById.get(structure.id) : undefined;
   const card = structure ? progress.cards[structure.id] : undefined;
@@ -118,6 +107,8 @@ export function Session({
       setLastId(id);
       setRevealed(false);
       setViewChoice(undefined);
+      setNudge(null);
+      setRound((n) => n + 1);
       setNow(Date.now());
       onSaved(updated);
       recordReview(updated, log).catch((e) =>
@@ -172,10 +163,14 @@ export function Session({
         e.preventDefault();
         if (next.kind === "learn") learn();
         else if (!revealed) setRevealed(true);
-        else grade("good");
-      } else if (next.kind === "practice" && revealed) {
-        const g = GRADES.find((x) => x.key === e.key);
-        if (g) grade(g.grade);
+      } else if (next.kind === "practice" && revealed && !e.repeat) {
+        if (e.key === "ArrowRight") {
+          e.preventDefault();
+          setNudge("good");
+        } else if (e.key === "ArrowLeft") {
+          e.preventDefault();
+          setNudge("again");
+        }
       } else if (
         (e.key === "l" || e.key === "L") &&
         audible &&
@@ -192,7 +187,7 @@ export function Session({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [next, revealed, learn, grade, audible, speaking, structure, item, hear]);
+  }, [next, revealed, learn, audible, speaking, structure, item, hear]);
 
   const showAnswer = next?.kind === "learn" || revealed;
   const official = structure ? latinName(structure) : "";
@@ -204,27 +199,26 @@ export function Session({
     };
   }, [structure?.id]);
   const upcoming = nextDue(progress.cards);
+  const canSwipe = next?.kind === "practice" && revealed && !!card;
+  const rememberedIn = card
+    ? formatInterval(Math.max(0, schedule(card, "good", now).due - now))
+    : "";
+  const forgottenIn = card
+    ? formatInterval(Math.max(0, schedule(card, "again", now).due - now))
+    : "";
 
   return (
     <div className="session">
       <header className="session-bar">
-        <button type="button" className="back" onClick={onExit}>
-          <ArrowLeft size={16} /> Decks
+        <button
+          type="button"
+          className="back"
+          onClick={onExit}
+          aria-label="Back to decks"
+        >
+          <ArrowLeft size={18} />
         </button>
         <h2>{deck.name}</h2>
-        <div className="session-tools">
-          <div className="tally" aria-label="Cards remaining">
-            <span className="tally-new" title="New today">
-              {tally.fresh}
-            </span>
-            <span className="tally-learning" title="Learning">
-              {tally.learning}
-            </span>
-            <span className="tally-review" title="Due for review">
-              {tally.review}
-            </span>
-          </div>
-        </div>
       </header>
 
       {error && (
@@ -250,14 +244,18 @@ export function Session({
           </button>
         </section>
       ) : (
-        <section
-          className="session-card"
-          key={`${structure.id}-${card?.reps ?? "new"}`}
+        <SwipeCard
+          key={`${structure.id}-${round}`}
+          enabled={canSwipe}
+          intent={nudge}
+          yesWhen={rememberedIn}
+          noWhen={forgottenIn}
+          onDecide={grade}
         >
           <Plate
             structure={structure}
             view={view}
-            figure={figureOf.get(structure.id)}
+            explore={showAnswer ? explorerHref(structure) : undefined}
             onView={showAnswer ? setView : undefined}
           />
           <div className="answer">
@@ -282,12 +280,13 @@ export function Session({
                 <p className="eyebrow-serif">
                   {CATEGORY_LABEL[structure.category]}
                 </p>
-                <div className="latin-row">
-                  <h3 className="latin">{item.label}</h3>
+                <h3 className="latin">
+                  {item.label}
                   {audible && (
                     <button
                       type="button"
                       className="speak"
+                      aria-label={speaking ? "Stop pronunciation" : "Listen"}
                       aria-pressed={speaking}
                       onClick={() => {
                         if (speaking) {
@@ -296,12 +295,10 @@ export function Session({
                         } else hear(item.label, capitalize(structure.en), true);
                       }}
                     >
-                      <Volume2 size={16} />
-                      <span>{speaking ? "Stop" : "Listen"}</span>
-                      <kbd>L</kbd>
+                      <Volume2 aria-hidden="true" />
                     </button>
                   )}
-                </div>
+                </h3>
                 {normalizeLatin(item.label) !== normalizeLatin(official) && (
                   <p className="official">
                     <span>Terminologia Anatomica</span> {official}
@@ -318,44 +315,15 @@ export function Session({
                       .join(", ")}
                   </p>
                 )}
-                <a
-                  className="explore"
-                  href={explorerHref(structure)}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Explore in 3D <ArrowUpRight size={14} />
-                </a>
-                {next!.kind === "learn" ? (
+                {next!.kind === "learn" && (
                   <button type="button" className="action" onClick={learn}>
                     Got it <kbd>Space</kbd>
                   </button>
-                ) : (
-                  <div
-                    className="grades"
-                    role="group"
-                    aria-label="How well did you remember?"
-                  >
-                    {GRADES.map(({ grade: g, label, key }) => (
-                      <button
-                        type="button"
-                        key={g}
-                        className={`grade grade-${g}`}
-                        onClick={() => grade(g)}
-                      >
-                        <span>{label}</span>
-                        <small>
-                          {formatInterval(schedule(card!, g, now).due - now)}
-                        </small>
-                        <kbd>{key}</kbd>
-                      </button>
-                    ))}
-                  </div>
                 )}
               </>
             )}
           </div>
-        </section>
+        </SwipeCard>
       )}
     </div>
   );

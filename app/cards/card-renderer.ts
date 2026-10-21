@@ -258,7 +258,7 @@ async function load(host: HTMLElement, api: CardRendererApi) {
     }
     const extent = fixed
       ? focus.getSize(new T.Vector3()).length()
-      : Math.max(w, h) * 2.3;
+      : Math.max(w, h) * 4;
     const size = Math.max(0.12, extent);
     const distance = size / 2 / Math.tan(T.MathUtils.degToRad(camera.fov / 2));
     camera.position.copy(center).addScaledVector(v.dir, distance);
@@ -275,7 +275,7 @@ async function load(host: HTMLElement, api: CardRendererApi) {
     const size = focus.getSize(new T.Vector3());
     const region = focus
       .clone()
-      .expandByScalar(Math.max(Math.max(size.x, size.y, size.z) * 0.9, 0.1));
+      .expandByScalar(Math.max(Math.max(size.x, size.y, size.z) * 2, 0.18));
     const own = new Set(s.parts);
     const bones: T.Mesh[] = [];
     const muscles: T.Mesh[] = [];

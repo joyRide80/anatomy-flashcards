@@ -2,9 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import "./study.css";
 import {
   deleteDeck,
-  exportBackup,
   getProgress,
-  importBackup,
   listDecks,
   listProgress,
   saveDeck,
@@ -28,9 +26,59 @@ type Screen =
   | { name: "create" }
   | { name: "study"; deck: Deck; progress: DeckProgress };
 
+const APP_NAME = "Anatomy Flashcards";
+const SEEDED_KEY = "human-atlas-default-decks";
+
+/** Shown on a first visit so the library is not an empty list. */
+const DEFAULT_DECKS = ["All muscles", "Thorax", "Columna vertebralis"] as const;
+
 const newId = () =>
   globalThis.crypto?.randomUUID?.() ??
   `deck-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+function categoryItems(catalog: Catalog, category: Category): DeckItem[] {
+  return catalog.structures
+    .filter((s) => s.category === category && s.images.length)
+    .map((s) => ({ structureId: s.id, label: latinName(s) }));
+}
+
+function defaultDeckItems(catalog: Catalog, name: string): DeckItem[] {
+  if (name === "All muscles") return categoryItems(catalog, "muscle");
+  return prefillItems(catalog, name);
+}
+
+let seeding: Promise<void> | null = null;
+
+/** Adds the starter decks once. Deleting one later leaves it deleted. */
+function ensureDefaultDecks(catalog: Catalog) {
+  seeding ??= seedDefaultDecks(catalog).catch((error) => {
+    seeding = null;
+    throw error;
+  });
+  return seeding;
+}
+
+async function seedDefaultDecks(catalog: Catalog) {
+  if (localStorage.getItem(SEEDED_KEY)) return;
+  const existing = new Set((await listDecks()).map((deck) => deck.name));
+  const now = Date.now();
+  for (let i = 0; i < DEFAULT_DECKS.length; i++) {
+    const name = DEFAULT_DECKS[i];
+    if (existing.has(name)) continue;
+    const items = defaultDeckItems(catalog, name);
+    if (!items.length) continue;
+    const t = now - i;
+    await saveDeck({
+      id: `default-${name.toLowerCase().replace(/\s+/g, "-")}`,
+      name,
+      createdAt: t,
+      updatedAt: t,
+      newPerDay: 20,
+      items,
+    });
+  }
+  localStorage.setItem(SEEDED_KEY, "1");
+}
 
 export default function StudyPage() {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
@@ -46,18 +94,36 @@ export default function StudyPage() {
   }, []);
 
   useEffect(() => {
-    document.title = "Flash cards · Human Atlas";
+    document.title = APP_NAME;
+  }, [APP_NAME]);
+
+  useEffect(() => {
     prepareVoices();
+    let cancelled = false;
     fetch("/cards/catalog.json")
       .then((r) => {
         if (!r.ok) throw new Error("The card catalogue could not be loaded.");
         return r.json() as Promise<Catalog>;
       })
-      .then(setCatalog)
-      .catch((e) => setError(e.message));
-    refresh().catch(() =>
-      setError("This browser blocked local storage, so decks cannot be saved."),
-    );
+      .then(async (catalog) => {
+        if (cancelled) return;
+        setCatalog(catalog);
+        try {
+          await ensureDefaultDecks(catalog);
+          if (!cancelled) await refresh();
+        } catch {
+          if (!cancelled)
+            setError(
+              "This browser blocked local storage, so decks cannot be saved.",
+            );
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e.message);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [refresh]);
 
   const fail = (e: unknown) =>
@@ -80,10 +146,10 @@ export default function StudyPage() {
 
   const preset = (category: Category) => {
     if (!catalog) return;
-    const items = catalog.structures
-      .filter((s) => s.category === category && s.images.length)
-      .map((s) => ({ structureId: s.id, label: latinName(s) }));
-    create(`All ${CATEGORY_LABEL[category].toLowerCase()}s`, items).catch(fail);
+    create(
+      `All ${CATEGORY_LABEL[category].toLowerCase()}s`,
+      categoryItems(catalog, category),
+    ).catch(fail);
   };
 
   const prefill = (name: string) => {
@@ -100,33 +166,15 @@ export default function StudyPage() {
     }
   };
 
-  const download = async () => {
-    const data = await exportBackup();
-    const url = URL.createObjectURL(
-      new Blob([JSON.stringify(data)], { type: "application/json" }),
-    );
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `human-atlas-flashcards-${data.exportedAt.slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const restore = async (file: File) => {
-    const restored = await importBackup(JSON.parse(await file.text()));
-    await refresh();
-    setError("");
-    alert(`Restored ${restored} ${restored === 1 ? "deck" : "decks"}.`);
-  };
-
   return (
     <div className="study">
-      <header className="study-head">
-        <a href="/" className="brand">
-          Human Atlas
-        </a>
-        <span className="brand-sub">Flash cards</span>
-      </header>
+      {screen.name !== "study" && (
+        <header className="study-head">
+          <a href="/" className="brand">
+            {APP_NAME}
+          </a>
+        </header>
+      )}
       <main className="study-main">
         {error && (
           <p className="study-error" role="alert">
@@ -163,8 +211,6 @@ export default function StudyPage() {
             onPrefill={prefill}
             onUpdate={(d) => saveDeck(d).then(refresh).catch(fail)}
             onDelete={(d) => deleteDeck(d.id).then(refresh).catch(fail)}
-            onExport={() => download().catch(fail)}
-            onImport={(f) => restore(f).catch(fail)}
           />
         )}
       </main>

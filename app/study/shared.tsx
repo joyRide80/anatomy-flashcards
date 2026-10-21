@@ -1,3 +1,4 @@
+import { ArrowUpRight } from "lucide-react";
 import type { Catalog, Category, Structure } from "@/lib/flashcards/types";
 
 export const CATEGORY_LABEL: Record<Category, string> = {
@@ -32,12 +33,13 @@ export function explorerHref(s: Structure) {
 export function Plate({
   structure,
   view,
-  figure,
+  explore,
   onView,
 }: {
   structure: Structure;
   view: number;
-  figure?: number;
+  /** Shown over the lower right of the picture once the answer is revealed. */
+  explore?: string;
   onView?: (index: number) => void;
 }) {
   const images = structure.images;
@@ -55,11 +57,19 @@ export function Plate({
         ) : (
           <div className="plate-missing">No image rendered yet</div>
         )}
+        {explore && (
+          <a
+            className="plate-explore"
+            href={explore}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Explore in 3D <ArrowUpRight size={14} />
+          </a>
+        )}
       </div>
-      <figcaption>
-        <span>{figure ? `Fig. ${figure}` : "Fig."}</span>
-        <span className="plate-view">{image ? `${image.view} view` : ""}</span>
-        {onView && images.length > 1 && (
+      {onView && images.length > 1 && (
+        <figcaption>
           <span className="plate-views" role="group" aria-label="Views">
             {images.map((img, i) => (
               <button
@@ -72,8 +82,8 @@ export function Plate({
               </button>
             ))}
           </span>
-        )}
-      </figcaption>
+        </figcaption>
+      )}
     </figure>
   );
 }
