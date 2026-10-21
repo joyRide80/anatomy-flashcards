@@ -20,6 +20,7 @@ import { canSpeak, prepareVoices, speakTerms, stopSpeaking } from "./speech";
 import { SwipeCard, type Recall } from "./swipe-card";
 import {
   CATEGORY_LABEL,
+  ExplorerOverlay,
   Plate,
   capitalize,
   catalogMaps,
@@ -67,6 +68,7 @@ export function Session({
   const [viewChoice, setViewChoice] = useState<{ id: string; index: number }>();
   const [error, setError] = useState("");
   const [speaking, setSpeaking] = useState(false);
+  const [explore, setExplore] = useState(false);
   const audible = canSpeak();
 
   const newRemaining = Math.max(0, deck.newPerDay - progress.newToday.count);
@@ -100,6 +102,15 @@ export function Session({
   const hear = useCallback((latin: string, english: string, force = false) => {
     speakTerms(latin, english, setSpeaking, force);
   }, []);
+
+  const toggleSpeak = useCallback(() => {
+    if (speaking) {
+      stopSpeaking();
+      setSpeaking(false);
+    } else if (item && structure) {
+      hear(item.label, capitalize(structure.en), true);
+    }
+  }, [speaking, item, structure, hear]);
 
   const commit = useCallback(
     (updated: DeckProgress, id: string, log?: ReviewLog) => {
@@ -155,7 +166,12 @@ export function Session({
   );
 
   useEffect(() => {
+    setExplore(false);
+  }, [structure?.id]);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (explore) return;
       if (e.target instanceof HTMLInputElement || e.metaKey || e.ctrlKey)
         return;
       if (!next) return;
@@ -179,15 +195,12 @@ export function Session({
         (next.kind === "learn" || revealed)
       ) {
         e.preventDefault();
-        if (speaking) {
-          stopSpeaking();
-          setSpeaking(false);
-        } else hear(item.label, capitalize(structure.en), true);
+        toggleSpeak();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [next, revealed, learn, audible, speaking, structure, item, hear]);
+  }, [explore, next, revealed, learn, audible, structure, item, toggleSpeak]);
 
   const showAnswer = next?.kind === "learn" || revealed;
   const official = structure ? latinName(structure) : "";
@@ -255,7 +268,7 @@ export function Session({
           <Plate
             structure={structure}
             view={view}
-            explore={showAnswer ? explorerHref(structure) : undefined}
+            explore={showAnswer ? () => setExplore(true) : undefined}
             onView={showAnswer ? setView : undefined}
           />
           <div className="answer">
@@ -288,12 +301,17 @@ export function Session({
                       className="speak"
                       aria-label={speaking ? "Stop pronunciation" : "Listen"}
                       aria-pressed={speaking}
-                      onClick={() => {
-                        if (speaking) {
-                          stopSpeaking();
-                          setSpeaking(false);
-                        } else hear(item.label, capitalize(structure.en), true);
+                      onPointerDown={(e) => {
+                        // iOS treats click as too late for speechSynthesis.
+                        if (
+                          e.pointerType !== "touch" &&
+                          e.pointerType !== "pen"
+                        )
+                          return;
+                        e.preventDefault();
+                        toggleSpeak();
                       }}
+                      onClick={toggleSpeak}
                     >
                       <Volume2 aria-hidden="true" />
                     </button>
@@ -324,6 +342,13 @@ export function Session({
             )}
           </div>
         </SwipeCard>
+      )}
+      {explore && structure && (
+        <ExplorerOverlay
+          src={explorerHref(structure)}
+          title={capitalize(structure.en)}
+          onClose={() => setExplore(false)}
+        />
       )}
     </div>
   );

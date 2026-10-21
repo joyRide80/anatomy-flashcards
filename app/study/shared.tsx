@@ -1,5 +1,9 @@
-import { ArrowUpRight } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
+import { X } from "lucide-react";
 import type { Catalog, Category, Structure } from "@/lib/flashcards/types";
+
+const CLOSE_EXPLORE = "human-atlas:close-explore";
 
 export const CATEGORY_LABEL: Record<Category, string> = {
   bone: "Bone",
@@ -30,6 +34,67 @@ export function explorerHref(s: Structure) {
   return `/atlas?${params}`;
 }
 
+export function ExplorerOverlay({
+  src,
+  title,
+  onClose,
+}: {
+  src: string;
+  title: string;
+  onClose: () => void;
+}) {
+  const dialog = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    const previous = document.activeElement;
+    dialog.current?.focus();
+    const close = () => onCloseRef.current();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close();
+      }
+    };
+    const onMessage = (e: MessageEvent) => {
+      if (e.origin !== location.origin) return;
+      if (e.data?.type === CLOSE_EXPLORE) close();
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("message", onMessage);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("message", onMessage);
+      if (previous instanceof HTMLElement) previous.focus();
+    };
+  }, []);
+
+  return createPortal(
+    <div
+      ref={dialog}
+      className="study explorer-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="explorer-overlay-title"
+      tabIndex={-1}
+    >
+      <div className="explorer-overlay-bar">
+        <h2 id="explorer-overlay-title">{title}</h2>
+        <button
+          type="button"
+          className="deck-settings-button explorer-overlay-close"
+          aria-label="Close 3D explorer"
+          onClick={onClose}
+        >
+          <X size={18} />
+        </button>
+      </div>
+      <iframe className="explorer-frame" src={src} title={title} />
+    </div>,
+    document.body,
+  );
+}
+
 export function Plate({
   structure,
   view,
@@ -39,7 +104,7 @@ export function Plate({
   structure: Structure;
   view: number;
   /** Shown over the lower right of the picture once the answer is revealed. */
-  explore?: string;
+  explore?: () => void;
   onView?: (index: number) => void;
 }) {
   const images = structure.images;
@@ -58,14 +123,9 @@ export function Plate({
           <div className="plate-missing">No image rendered yet</div>
         )}
         {explore && (
-          <a
-            className="plate-explore"
-            href={explore}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Explore in 3D <ArrowUpRight size={14} />
-          </a>
+          <button type="button" className="plate-explore" onClick={explore}>
+            Explore in 3D
+          </button>
         )}
       </div>
       {onView && images.length > 1 && (

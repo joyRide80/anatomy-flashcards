@@ -656,12 +656,62 @@ body:has(.deck-menu) .study {
   box-shadow: 0 8px 24px -12px #1d242780;
   font-size: 12px;
   color: var(--slate);
-  text-decoration: none;
+  cursor: pointer;
   backdrop-filter: blur(8px);
 }
 .plate-explore:hover {
   color: var(--ink);
   background: white;
+}
+.explorer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}
+body:has(.explorer-overlay) {
+  overflow: hidden;
+}
+body:has(.explorer-overlay) .study:not(.explorer-overlay) {
+  overflow: hidden;
+}
+.explorer-overlay-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  min-height: 52px;
+  padding: 8px 14px;
+  padding-top: max(8px, env(safe-area-inset-top));
+  padding-left: max(14px, env(safe-area-inset-left));
+  padding-right: max(14px, env(safe-area-inset-right));
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper);
+}
+.explorer-overlay-bar h2 {
+  margin: 0;
+  min-width: 0;
+  font: 600 22px/1.2 var(--serif);
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.explorer-overlay-close {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+}
+.explorer-frame {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  background: #e8eaec;
 }
 .plate-frame img {
   width: 100%;
@@ -1042,7 +1092,8 @@ body:has(.deck-menu) .study {
     gap: 10px;
     margin-bottom: 18px;
   }
-  .session-bar h2 {
+  .session-bar h2,
+  .explorer-overlay-bar h2 {
     font-size: 19px;
   }
 }
@@ -1095,6 +1146,9 @@ body:has(.deck-menu) .study {
   .plate-explore {
     display: inline-flex;
     align-items: center;
+  }
+  .explorer-overlay-bar {
+    min-height: 56px;
   }
   .field input,
   .match-select select {

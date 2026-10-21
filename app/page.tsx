@@ -125,8 +125,32 @@ export default function Home() {
   }, []);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && studyExplore && window.parent !== window) {
+        if (panel) {
+          e.preventDefault();
+          setPanel(null);
+          return;
+        }
+        if (about) {
+          e.preventDefault();
+          setAbout(false);
+          return;
+        }
+        if (details) {
+          e.preventDefault();
+          setDetails(false);
+          return;
+        }
+        e.preventDefault();
+        window.parent.postMessage(
+          { type: "human-atlas:close-explore" },
+          location.origin,
+        );
+        return;
+      }
       if (
         e.key === "/" &&
+        !studyExplore &&
         !(e.target instanceof HTMLInputElement) &&
         !(e.target instanceof HTMLTextAreaElement)
       ) {
@@ -137,7 +161,7 @@ export default function Home() {
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, []);
+  }, [studyExplore, panel, about, details]);
   const parts = useMemo(
     () => new Map(atlas?.parts.map((p) => [p.id, p])),
     [atlas],

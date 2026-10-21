@@ -1888,7 +1888,16 @@ h1 .edition {
   }
 }
 
-/* Flash-card “Explore in 3D”: full-height viewport without dock or detail sheet. */
+/* Flash-card “Explore in 3D”: the model only — overlay chrome owns dismiss. */
+.studio.study-explore .identity,
+.studio.study-explore .study-link,
+.studio.study-explore .studio-footer,
+.studio.study-explore .top-actions,
+.studio.study-explore .view-controls,
+.studio.study-explore .layers-panel,
+.studio.study-explore .search-panel {
+  display: none;
+}
 .studio.study-explore .scene-caption {
   bottom: max(20px, env(safe-area-inset-bottom));
 }
