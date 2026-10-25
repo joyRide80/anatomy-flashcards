@@ -109,9 +109,17 @@ export function schedule(
 
 export type QueueItem = { kind: "learn" | "practice"; structure: Structure };
 
+/** One random card, skipping `avoidId` when another card is available. */
+function choose(pool: Structure[], avoidId?: string): Structure | undefined {
+  const source = avoidId ? pool.filter((s) => s.id !== avoidId) : pool;
+  if (!source.length) return undefined;
+  return source[Math.floor(Math.random() * source.length)];
+}
+
 /**
- * Picks the next card. Order: anything due now, then a new learning card (within the
- * daily limit), then (re)learning cards due soon. Avoids repeating `lastId` when possible.
+ * Picks the next card. Priority: anything due now, then a new card (within the
+ * daily limit), then (re)learning cards due soon. Cards inside a priority are
+ * in random order. Avoids repeating `lastId` when another card can be shown.
  */
 export function pickNext(
   deck: Structure[],
@@ -121,23 +129,18 @@ export function pickNext(
   lastId?: string,
 ): QueueItem | null {
   const started = deck.filter((s) => cards[s.id]);
-  const byDue = (a: Structure, b: Structure) =>
-    cards[a.id].due - cards[b.id].due;
-  const notLast = (s: Structure) => s.id !== lastId;
+  const dueNow = started.filter((s) => cards[s.id].due <= now);
+  const fresh = newRemaining > 0 ? deck.filter((s) => !cards[s.id]) : [];
+  const soon = started.filter(
+    (s) =>
+      cards[s.id].phase !== "review" && cards[s.id].due <= now + LEARN_AHEAD,
+  );
 
-  const dueNow = started.filter((s) => cards[s.id].due <= now).sort(byDue);
-  const fresh = newRemaining > 0 ? deck.find((s) => !cards[s.id]) : undefined;
-  const soon = started
-    .filter(
-      (s) =>
-        cards[s.id].phase !== "review" && cards[s.id].due <= now + LEARN_AHEAD,
-    )
-    .sort(byDue);
-
-  const due = dueNow.find(notLast);
+  const due = choose(dueNow, lastId);
   if (due) return { kind: "practice", structure: due };
-  if (fresh) return { kind: "learn", structure: fresh };
-  const ahead = soon.find(notLast) ?? dueNow[0] ?? soon[0];
+  const nextFresh = choose(fresh);
+  if (nextFresh) return { kind: "learn", structure: nextFresh };
+  const ahead = choose(soon, lastId) ?? dueNow[0] ?? soon[0];
   if (ahead) return { kind: "practice", structure: ahead };
   return null;
 }

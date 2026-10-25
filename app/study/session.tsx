@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Volume2 } from "lucide-react";
 import {
   formatInterval,
@@ -16,6 +16,8 @@ import type {
   Grade,
   ReviewLog,
 } from "@/lib/flashcards/types";
+import { ChoiceList } from "./choice";
+import { buildChoices, type Game } from "./choices";
 import { canSpeak, prepareVoices, speakTerms, stopSpeaking } from "./speech";
 import { SwipeCard, type Recall } from "./swipe-card";
 import {
@@ -31,6 +33,65 @@ import {
 function currentDay(p: DeckProgress): DeckProgress {
   const day = studyDay();
   return p.newToday.day === day ? p : { ...p, newToday: { day, count: 0 } };
+}
+
+function returnsIn(interval: string) {
+  return interval === "now"
+    ? "Returns in a moment."
+    : `Returns in ${interval}.`;
+}
+
+function RevealedTerm({
+  label,
+  official,
+  english,
+  note,
+  members,
+  audible,
+  speaking,
+  onToggleSpeak,
+}: {
+  label: string;
+  official: string;
+  english: string;
+  note?: string;
+  members?: string;
+  audible: boolean;
+  speaking: boolean;
+  onToggleSpeak: () => void;
+}) {
+  return (
+    <>
+      <h3 className="latin">
+        {label}
+        {audible && (
+          <button
+            type="button"
+            className="speak"
+            aria-label={speaking ? "Stop pronunciation" : "Listen"}
+            aria-pressed={speaking}
+            onPointerDown={(e) => {
+              // iOS treats click as too late for speechSynthesis.
+              if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+              e.preventDefault();
+              onToggleSpeak();
+            }}
+            onClick={onToggleSpeak}
+          >
+            <Volume2 aria-hidden="true" />
+          </button>
+        )}
+      </h3>
+      {normalizeLatin(label) !== normalizeLatin(official) && (
+        <p className="official">
+          <span>Terminologia Anatomica</span> {official}
+        </p>
+      )}
+      <p className="english">{english}</p>
+      {note && <p className="note">{note}</p>}
+      {members && <p className="members">Includes {members}</p>}
+    </>
+  );
 }
 
 export function Session({
@@ -69,6 +130,8 @@ export function Session({
   const [error, setError] = useState("");
   const [speaking, setSpeaking] = useState(false);
   const [explore, setExplore] = useState(false);
+  const [picked, setPicked] = useState<string | null>(null);
+  const pickedRef = useRef<string | null>(null);
   const audible = canSpeak();
 
   const newRemaining = Math.max(0, deck.newPerDay - progress.newToday.count);
@@ -79,6 +142,59 @@ export function Session({
   const structure = next?.structure;
   const item = structure ? itemById.get(structure.id) : undefined;
   const card = structure ? progress.cards[structure.id] : undefined;
+  // Each card is recall or multiple choice, chosen once so a re-render cannot switch it.
+  const structureId = structure?.id;
+  const gameKey = `${structureId ?? ""}:${round}`;
+  const [gamePick, setGamePick] = useState<{ key: string; game: Game }>({
+    key: "",
+    game: "recall",
+  });
+  let game: Game = gamePick.game;
+  if (!structureId) game = "recall";
+  else if (gamePick.key !== gameKey) {
+    game = Math.random() < 0.5 ? "choice" : "recall";
+    setGamePick({ key: gameKey, game });
+  }
+  const deckPool = useMemo(
+    () =>
+      items.flatMap((entry) => {
+        const subject = maps.structures.get(entry.structureId);
+        if (!subject) return [];
+        return [
+          {
+            id: subject.id,
+            label: entry.label,
+            english: capitalize(subject.en),
+            category: subject.category,
+          },
+        ];
+      }),
+    [items, maps],
+  );
+  const catalogPool = useMemo(
+    () =>
+      catalog.structures.map((subject) => ({
+        id: subject.id,
+        label: latinName(subject),
+        english: capitalize(subject.en),
+        category: subject.category,
+      })),
+    [catalog],
+  );
+  const options = useMemo(() => {
+    if (game !== "choice" || !structure || !item) return [];
+    return buildChoices(
+      {
+        id: structure.id,
+        label: item.label,
+        english: capitalize(structure.en),
+        category: structure.category,
+      },
+      deckPool,
+      catalogPool,
+      `${structure.id}:${round}`,
+    );
+  }, [game, structure, item, deckPool, catalogPool, round]);
 
   // Reviews rotate through the rendered views so the shape is learned, not one picture.
   const view =
@@ -119,6 +235,8 @@ export function Session({
       setRevealed(false);
       setViewChoice(undefined);
       setNudge(null);
+      pickedRef.current = null;
+      setPicked(null);
       setRound((n) => n + 1);
       setNow(Date.now());
       onSaved(updated);
@@ -165,16 +283,82 @@ export function Session({
     [structure, card, progress, deck.id, commit],
   );
 
+  const choose = useCallback((id: string) => {
+    if (pickedRef.current) return;
+    pickedRef.current = id;
+    setPicked(id);
+  }, []);
+
+  const advanceChoice = useCallback(() => {
+    if (!structure || !pickedRef.current) return;
+    const correct = pickedRef.current === structure.id;
+    const t = Date.now();
+    const p = currentDay(progress);
+    const existing = p.cards[structure.id];
+    const g: Grade = correct ? "good" : "again";
+    const updatedCard = schedule(existing ?? introduce(t), g, t);
+    const updated: DeckProgress = {
+      ...p,
+      cards: { ...p.cards, [structure.id]: updatedCard },
+      newToday: existing
+        ? p.newToday
+        : { day: p.newToday.day, count: p.newToday.count + 1 },
+    };
+    commit(updated, structure.id, {
+      deckId: deck.id,
+      structureId: structure.id,
+      grade: g,
+      at: t,
+      phase: updatedCard.phase,
+      interval: updatedCard.interval,
+      due: updatedCard.due,
+    });
+  }, [structure, progress, deck.id, commit]);
+
   useEffect(() => {
     setExplore(false);
+    pickedRef.current = null;
+    setPicked(null);
   }, [structure?.id]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (explore) return;
-      if (e.target instanceof HTMLInputElement || e.metaKey || e.ctrlKey)
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.metaKey ||
+        e.ctrlKey ||
+        e.altKey
+      )
         return;
-      if (!next) return;
+      if (!next || !structure) return;
+      if (game === "choice") {
+        if (e.repeat) return;
+        const digit = "1234".indexOf(e.key);
+        const letter = "abcd".indexOf(e.key.toLowerCase());
+        const index = digit >= 0 ? digit : letter;
+        if (!picked && index >= 0) {
+          const option = options[index];
+          if (!option) return;
+          e.preventDefault();
+          choose(option.id);
+          return;
+        }
+        if ((e.key === " " || e.key === "Enter") && picked) {
+          e.preventDefault();
+          advanceChoice();
+        } else if (
+          (e.key === "l" || e.key === "L") &&
+          audible &&
+          item &&
+          picked
+        ) {
+          e.preventDefault();
+          toggleSpeak();
+        }
+        return;
+      }
       if (e.key === " " || e.key === "Enter") {
         e.preventDefault();
         if (next.kind === "learn") learn();
@@ -190,7 +374,6 @@ export function Session({
       } else if (
         (e.key === "l" || e.key === "L") &&
         audible &&
-        structure &&
         item &&
         (next.kind === "learn" || revealed)
       ) {
@@ -200,9 +383,24 @@ export function Session({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [explore, next, revealed, learn, audible, structure, item, toggleSpeak]);
+  }, [
+    explore,
+    next,
+    revealed,
+    learn,
+    audible,
+    structure,
+    item,
+    toggleSpeak,
+    game,
+    picked,
+    options,
+    choose,
+    advanceChoice,
+  ]);
 
-  const showAnswer = next?.kind === "learn" || revealed;
+  const showAnswer =
+    game === "choice" ? picked !== null : next?.kind === "learn" || revealed;
   const official = structure ? latinName(structure) : "";
 
   useEffect(() => {
@@ -219,9 +417,25 @@ export function Session({
   const forgottenIn = card
     ? formatInterval(Math.max(0, schedule(card, "again", now).due - now))
     : "";
+  const choiceCorrect = picked !== null && picked === structure?.id;
+  const choiceReturn =
+    game === "choice" && picked && structure
+      ? returnsIn(
+          formatInterval(
+            Math.max(
+              0,
+              schedule(
+                card ?? introduce(now),
+                choiceCorrect ? "good" : "again",
+                now,
+              ).due - now,
+            ),
+          ),
+        )
+      : "";
 
   return (
-    <div className="session">
+    <div className={game === "choice" ? "session is-choice" : "session"}>
       <header className="session-bar">
         <button
           type="button"
@@ -231,7 +445,10 @@ export function Session({
         >
           <ArrowLeft size={18} />
         </button>
-        <h2>{deck.name}</h2>
+        <div className="session-heading">
+          <h2>{deck.name}</h2>
+          {game === "choice" && <p className="session-game">Multiple choice</p>}
+        </div>
       </header>
 
       {error && (
@@ -259,7 +476,7 @@ export function Session({
       ) : (
         <SwipeCard
           key={`${structure.id}-${round}`}
-          enabled={canSwipe}
+          enabled={game === "recall" && canSwipe}
           intent={nudge}
           yesWhen={rememberedIn}
           noWhen={forgottenIn}
@@ -269,11 +486,73 @@ export function Session({
             structure={structure}
             view={view}
             explore={showAnswer ? () => setExplore(true) : undefined}
-            onView={showAnswer ? setView : undefined}
+            onView={game === "choice" || showAnswer ? setView : undefined}
+            praise={game === "choice" && choiceCorrect}
           />
           <div className="answer">
-            {next!.kind === "learn" && <p className="badge-new">New card</p>}
-            {!showAnswer ? (
+            {next!.kind === "learn" && game === "recall" && (
+              <p className="badge-new">New card</p>
+            )}
+            {game === "choice" ? (
+              <>
+                {next!.kind === "learn" && !picked && (
+                  <p className="badge-new">New card</p>
+                )}
+                <p className="eyebrow-serif">
+                  {CATEGORY_LABEL[structure.category]}
+                </p>
+                {!picked ? (
+                  <>
+                    <h3 className="prompt">Which structure is highlighted?</h3>
+                    <p className="hint">Choose its Latin name.</p>
+                  </>
+                ) : (
+                  <>
+                    <p
+                      className={
+                        choiceCorrect
+                          ? "verdict verdict-yes"
+                          : "verdict verdict-no"
+                      }
+                      role="status"
+                    >
+                      {choiceCorrect ? "Correct" : "Not this one"}
+                    </p>
+                    <RevealedTerm
+                      label={item.label}
+                      official={official}
+                      english={capitalize(structure.en)}
+                      note={item.note}
+                      members={
+                        structure.members
+                          ?.map((m) => maps.structures.get(m)?.en)
+                          .filter(Boolean)
+                          .join(", ") || undefined
+                      }
+                      audible={audible}
+                      speaking={speaking}
+                      onToggleSpeak={toggleSpeak}
+                    />
+                    <p className="hint">{choiceReturn}</p>
+                  </>
+                )}
+                <ChoiceList
+                  options={options}
+                  pickedId={picked}
+                  correctId={structure.id}
+                  onPick={choose}
+                />
+                {picked && (
+                  <button
+                    type="button"
+                    className="action"
+                    onClick={advanceChoice}
+                  >
+                    Next <kbd>Space</kbd>
+                  </button>
+                )}
+              </>
+            ) : !showAnswer ? (
               <>
                 <p className="eyebrow-serif">
                   {CATEGORY_LABEL[structure.category]}
@@ -293,46 +572,21 @@ export function Session({
                 <p className="eyebrow-serif">
                   {CATEGORY_LABEL[structure.category]}
                 </p>
-                <h3 className="latin">
-                  {item.label}
-                  {audible && (
-                    <button
-                      type="button"
-                      className="speak"
-                      aria-label={speaking ? "Stop pronunciation" : "Listen"}
-                      aria-pressed={speaking}
-                      onPointerDown={(e) => {
-                        // iOS treats click as too late for speechSynthesis.
-                        if (
-                          e.pointerType !== "touch" &&
-                          e.pointerType !== "pen"
-                        )
-                          return;
-                        e.preventDefault();
-                        toggleSpeak();
-                      }}
-                      onClick={toggleSpeak}
-                    >
-                      <Volume2 aria-hidden="true" />
-                    </button>
-                  )}
-                </h3>
-                {normalizeLatin(item.label) !== normalizeLatin(official) && (
-                  <p className="official">
-                    <span>Terminologia Anatomica</span> {official}
-                  </p>
-                )}
-                <p className="english">{capitalize(structure.en)}</p>
-                {item.note && <p className="note">{item.note}</p>}
-                {structure.members && (
-                  <p className="members">
-                    Includes{" "}
-                    {structure.members
-                      .map((m) => maps.structures.get(m)?.en)
+                <RevealedTerm
+                  label={item.label}
+                  official={official}
+                  english={capitalize(structure.en)}
+                  note={item.note}
+                  members={
+                    structure.members
+                      ?.map((m) => maps.structures.get(m)?.en)
                       .filter(Boolean)
-                      .join(", ")}
-                  </p>
-                )}
+                      .join(", ") || undefined
+                  }
+                  audible={audible}
+                  speaking={speaking}
+                  onToggleSpeak={toggleSpeak}
+                />
                 {next!.kind === "learn" && (
                   <button type="button" className="action" onClick={learn}>
                     Got it <kbd>Space</kbd>

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import "./study.css";
 import {
+  cachedDecks,
+  cachedProgress,
   deleteDeck,
   getProgress,
   listDecks,
@@ -58,8 +60,16 @@ function ensureDefaultDecks(catalog: Catalog) {
   return seeding;
 }
 
+function defaultDecksAlreadySeeded() {
+  try {
+    return localStorage.getItem(SEEDED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 async function seedDefaultDecks(catalog: Catalog) {
-  if (localStorage.getItem(SEEDED_KEY)) return;
+  if (defaultDecksAlreadySeeded()) return;
   const existing = new Set((await listDecks()).map((deck) => deck.name));
   const now = Date.now();
   for (let i = 0; i < DEFAULT_DECKS.length; i++) {
@@ -77,13 +87,19 @@ async function seedDefaultDecks(catalog: Catalog) {
       items,
     });
   }
-  localStorage.setItem(SEEDED_KEY, "1");
+  try {
+    localStorage.setItem(SEEDED_KEY, "1");
+  } catch {
+    // The decks are already stored. A later visit skips any name that exists.
+  }
 }
 
 export default function StudyPage() {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
-  const [decks, setDecks] = useState<Deck[]>([]);
-  const [progress, setProgress] = useState<Record<string, DeckProgress>>({});
+  const [decks, setDecks] = useState<Deck[]>(() => cachedDecks());
+  const [progress, setProgress] = useState<Record<string, DeckProgress>>(() =>
+    cachedProgress(),
+  );
   const [screen, setScreen] = useState<Screen>({ name: "library" });
   const [error, setError] = useState("");
 
@@ -110,9 +126,14 @@ export default function StudyPage() {
         setCatalog(catalog);
         try {
           await ensureDefaultDecks(catalog);
-          if (!cancelled) await refresh();
         } catch {
-          if (!cancelled)
+          // Starter decks are optional. Decks saved on this device still load.
+        }
+        if (cancelled) return;
+        try {
+          await refresh();
+        } catch {
+          if (!cancelled && cachedDecks().length === 0)
             setError(
               "This browser blocked local storage, so decks cannot be saved.",
             );
@@ -160,7 +181,11 @@ export default function StudyPage() {
 
   const study = async (deck: Deck) => {
     try {
-      setScreen({ name: "study", deck, progress: await getProgress(deck.id) });
+      setScreen({
+        name: "study",
+        deck,
+        progress: await getProgress(deck.id),
+      });
     } catch (e) {
       fail(e);
     }

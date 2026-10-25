@@ -383,6 +383,10 @@ body:has(.deck-menu) .study {
 .deck h4 {
   margin: 0;
   font: 500 27px/1.15 var(--serif);
+  overflow-wrap: anywhere;
+}
+.deck-main {
+  min-width: 0;
 }
 .deck-main .tally {
   margin-top: 6px;
@@ -395,6 +399,7 @@ body:has(.deck-menu) .study {
 .deck-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
 }
 .deck-actions .action {
@@ -459,6 +464,9 @@ body:has(.deck-menu) .study {
   grid-template-columns: 44px minmax(0, 1fr) 44px;
   gap: 8px;
 }
+.session-heading {
+  min-width: 0;
+}
 .session-bar h2 {
   margin: 0;
   font: 500 24px/1.2 var(--serif);
@@ -466,6 +474,12 @@ body:has(.deck-menu) .study {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.session-game {
+  margin: 1px 0 0;
+  font: italic 500 16px/1.2 var(--serif);
+  color: var(--vermilion);
+  text-align: center;
 }
 .create .session-bar {
   grid-template-columns: auto minmax(0, 1fr);
@@ -713,6 +727,29 @@ body:has(.explorer-overlay) .study:not(.explorer-overlay) {
   border: 0;
   background: #e8eaec;
 }
+.plate-frame.is-correct {
+  box-shadow: inset 0 0 0 2px var(--sage);
+}
+.choice-stamp {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 2;
+  margin: 0;
+  padding: 6px 12px 8px;
+  border: 2px solid currentColor;
+  outline: 1px solid currentColor;
+  outline-offset: 3px;
+  border-radius: 3px;
+  background: #faf8f3eb;
+  color: var(--sage);
+  pointer-events: none;
+  animation: stamp-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.choice-stamp strong {
+  display: block;
+  font: italic 600 28px/0.95 var(--serif);
+}
 .plate-frame img {
   width: 100%;
   height: 100%;
@@ -851,6 +888,94 @@ body:has(.explorer-overlay) .study:not(.explorer-overlay) {
 }
 .answer .action {
   margin-top: 10px;
+}
+.verdict {
+  margin: 0;
+  font: italic 500 18px/1.2 var(--serif);
+}
+.verdict-yes {
+  color: var(--sage);
+}
+.verdict-no {
+  color: var(--vermilion);
+}
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin: 2px 0 0;
+}
+.study .choice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 14px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 12px;
+  background: var(--sheet);
+  text-align: left;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    opacity 0.15s;
+}
+.study .choice:hover:not(:disabled) {
+  border-color: var(--ink);
+  background: #fff;
+  color: var(--ink);
+}
+.study .choice:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.study .choice:disabled:hover {
+  background: var(--sheet);
+  color: inherit;
+}
+.choice-key {
+  flex: none;
+  width: 1.4em;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.choice-label {
+  flex: 1;
+  min-width: 0;
+  font: italic 500 22px/1.25 var(--serif);
+  overflow-wrap: anywhere;
+}
+.choice kbd {
+  flex: none;
+}
+.study .choice.is-correct,
+.study .choice.is-correct:hover {
+  border-color: var(--sage);
+  background: #3f726214;
+  color: inherit;
+  animation: choice-yes 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.study .choice.is-correct .choice-key {
+  color: var(--sage);
+}
+.study .choice.is-wrong,
+.study .choice.is-wrong:hover {
+  border-color: var(--vermilion);
+  background: #c8452c12;
+  color: inherit;
+}
+.study .choice.is-wrong .choice-key {
+  color: var(--vermilion);
+}
+.study .choice.is-dim,
+.study .choice.is-dim:hover {
+  opacity: 0.42;
+  background: transparent;
+  color: inherit;
 }
 
 .session-done {
@@ -1016,6 +1141,27 @@ body:has(.explorer-overlay) .study:not(.explorer-overlay) {
   font-size: 12px;
 }
 
+@keyframes stamp-in {
+  from {
+    opacity: 0;
+    transform: rotate(-18deg) scale(1.35);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(-8deg) scale(1);
+  }
+}
+@keyframes choice-yes {
+  from {
+    transform: scale(0.97);
+  }
+  45% {
+    transform: scale(1.02);
+  }
+  to {
+    transform: scale(1);
+  }
+}
 @keyframes rise {
   from {
     opacity: 0;
@@ -1034,6 +1180,13 @@ body:has(.explorer-overlay) .study:not(.explorer-overlay) {
   to {
     opacity: 1;
     filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .choice-stamp,
+  .study .choice.is-correct {
+    animation: none;
   }
 }
 
@@ -1074,6 +1227,23 @@ body:has(.explorer-overlay) .study:not(.explorer-overlay) {
   }
   .prompt {
     font-size: 30px;
+  }
+  .session.is-choice .plate {
+    padding: 8px;
+  }
+  .session.is-choice .plate-frame {
+    aspect-ratio: 4 / 3;
+    max-height: 34dvh;
+  }
+  .session.is-choice .prompt {
+    font-size: 28px;
+  }
+  .session.is-choice .choice {
+    min-height: 48px;
+    padding: 8px 12px;
+  }
+  .session.is-choice .choice-label {
+    font-size: 20px;
   }
   .deck {
     gap: 12px;

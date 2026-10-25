@@ -100,18 +100,21 @@ export function Plate({
   view,
   explore,
   onView,
+  praise = false,
 }: {
   structure: Structure;
   view: number;
   /** Shown over the lower right of the picture once the answer is revealed. */
   explore?: () => void;
   onView?: (index: number) => void;
+  /** A correct multiple-choice answer. Stamps the picture. */
+  praise?: boolean;
 }) {
   const images = structure.images;
   const image = images[view % Math.max(1, images.length)];
   return (
     <figure className="plate">
-      <div className="plate-frame">
+      <div className={praise ? "plate-frame is-correct" : "plate-frame"}>
         {image ? (
           <img
             key={image.src}
@@ -121,6 +124,11 @@ export function Plate({
           />
         ) : (
           <div className="plate-missing">No image rendered yet</div>
+        )}
+        {praise && (
+          <p className="choice-stamp" aria-hidden="true">
+            <strong>Correct</strong>
+          </p>
         )}
         {explore && (
           <button type="button" className="plate-explore" onClick={explore}>
