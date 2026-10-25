@@ -1,7 +1,7 @@
 import * as T from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { decodeModelResponse } from "../model-download";
-import type { Atlas, Part } from "../anatomy";
+import { DEFAULT_LIGHTING, type Atlas, type Part } from "../anatomy";
 import type { Catalog, Structure } from "@/lib/flashcards/types";
 
 /** Systems loaded as surrounding anatomy on cards. */
@@ -122,22 +122,39 @@ async function load(host: HTMLElement, api: CardRendererApi) {
   renderer.setClearColor(0x000000, 0);
   renderer.outputColorSpace = T.SRGBColorSpace;
   renderer.toneMapping = T.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.1;
+  renderer.toneMappingExposure = DEFAULT_LIGHTING.exposure;
   host.textContent = "";
   host.appendChild(renderer.domElement);
 
   const scene = new T.Scene();
   const pmrem = new T.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  const room = new RoomEnvironment();
+  const env = pmrem.fromScene(room, DEFAULT_LIGHTING.softness);
+  scene.environment = env.texture;
+  room.traverse((object) => {
+    if (object instanceof T.Mesh) {
+      object.geometry.dispose();
+      const roomMaterials = Array.isArray(object.material)
+        ? object.material
+        : [object.material];
+      roomMaterials.forEach((material) => material.dispose());
+    }
+  });
   pmrem.dispose();
-  scene.add(new T.HemisphereLight(0xffffff, 0xa7acb2, 0.9));
+  scene.add(
+    new T.HemisphereLight(0xf4f1ea, 0x6e655c, DEFAULT_LIGHTING.hemisphere),
+  );
   const camera = new T.PerspectiveCamera(28, 1, 0.005, 20);
-  const headlight = new T.DirectionalLight(0xfffaf4, 2.2);
-  headlight.position.set(-0.6, 0.9, 0.4);
-  camera.add(headlight);
-  const fill = new T.DirectionalLight(0xe9f0ff, 0.8);
-  fill.position.set(0.8, -0.3, 0.2);
+  // Lights stay with the camera so a posterior close-up is lit as clearly as a front view.
+  const key = new T.DirectionalLight(0xfffaf4, DEFAULT_LIGHTING.key);
+  key.position.set(-0.8, 1.4, 0.5);
+  camera.add(key);
+  const fill = new T.DirectionalLight(0xf3efe8, DEFAULT_LIGHTING.fill);
+  fill.position.set(1.1, 0.4, 0.3);
   camera.add(fill);
+  const rim = new T.DirectionalLight(0xe9f0ff, DEFAULT_LIGHTING.rim);
+  rim.position.set(0.5, 0.6, -1.4);
+  camera.add(rim);
   scene.add(camera);
 
   const side = T.DoubleSide;
@@ -146,12 +163,14 @@ async function load(host: HTMLElement, api: CardRendererApi) {
       color: HIGHLIGHT,
       roughness: 0.48,
       metalness: 0.04,
+      envMapIntensity: DEFAULT_LIGHTING.environment,
       side,
     }),
     bone: new T.MeshStandardMaterial({
       color: BONE,
       roughness: 0.62,
       metalness: 0.02,
+      envMapIntensity: DEFAULT_LIGHTING.environment,
       side,
     }),
     // Ghosted muscles draw in two passes so only their nearest surface is shaded,
@@ -160,6 +179,7 @@ async function load(host: HTMLElement, api: CardRendererApi) {
     ghost: new T.MeshStandardMaterial({
       color: MUSCLE_GHOST,
       roughness: 0.6,
+      envMapIntensity: DEFAULT_LIGHTING.environment,
       transparent: true,
       opacity: 0.32,
       depthWrite: false,

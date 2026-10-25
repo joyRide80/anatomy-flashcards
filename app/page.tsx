@@ -13,6 +13,7 @@ import {
   RotateCcw,
   RotateCw,
   Search,
+  Sun,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ import {
 } from "@/components/ui/combobox";
 import AnatomyScene from "./scene";
 import {
+  DEFAULT_LIGHTING,
   DEFAULT_VISIBLE,
   SYSTEMS,
   EXPLANATIONS,
@@ -42,10 +44,25 @@ import {
   studyContext,
   type Atlas,
   type Concept,
+  type Lighting,
   type SceneState,
   type SystemId,
   type View,
 } from "./anatomy";
+const LIGHT_ROWS: {
+  key: keyof Lighting;
+  label: string;
+  min: number;
+  max: number;
+}[] = [
+  { key: "exposure", label: "Exposure", min: 0.4, max: 1.8 },
+  { key: "environment", label: "Environment", min: 0, max: 1.5 },
+  { key: "softness", label: "Softness", min: 0, max: 1 },
+  { key: "hemisphere", label: "Sky fill", min: 0, max: 1.5 },
+  { key: "key", label: "Key", min: 0, max: 3 },
+  { key: "fill", label: "Fill", min: 0, max: 2 },
+  { key: "rim", label: "Rim", min: 0, max: 2 },
+];
 const initial: SceneState = {
   explode: 0,
   visible: DEFAULT_VISIBLE,
@@ -54,6 +71,8 @@ const initial: SceneState = {
   view: "three-quarter",
   rotate: false,
   reset: 0,
+  removed: [],
+  knife: false,
 };
 export default function Home() {
   const detailTitle = useRef<HTMLHeadingElement>(null);
@@ -68,6 +87,8 @@ export default function Home() {
     [details, setDetails] = useState(false),
     [studyExplore, setStudyExplore] = useState(false),
     [about, setAbout] = useState(false),
+    [lighting, setLighting] = useState(DEFAULT_LIGHTING),
+    [lightOpen, setLightOpen] = useState(false),
     [query, setQuery] = useState(""),
     [chosen, setChosen] = useState<Concept | null>(null);
   useEffect(() => {
@@ -182,12 +203,14 @@ export default function Home() {
       .filter((p) => !!p),
     selected = selectedParts[0],
     system = SYSTEMS.find((s) => s.id === selected?.system);
+  const removedIds = new Set(state.removed);
   const visibleCount =
-    atlas?.parts.filter((p) =>
-      state.isolate
+    atlas?.parts.filter((p) => {
+      if (removedIds.has(p.id)) return false;
+      return state.isolate
         ? state.selected.includes(p.id) || !!state.context?.includes(p.id)
-        : state.visible.includes(p.system) || state.selected.includes(p.id),
-    ).length ?? 0;
+        : state.visible.includes(p.system) || state.selected.includes(p.id);
+    }).length ?? 0;
   const results = useMemo(() => {
     if (!atlas) return [];
     const term = query.toLowerCase().trim();
@@ -262,6 +285,7 @@ export default function Home() {
     setState((s) => ({
       ...initial,
       visible: DEFAULT_VISIBLE,
+      knife: s.knife,
       reset: s.reset + 1,
     }));
     setChosen(null);
@@ -269,20 +293,50 @@ export default function Home() {
     setStudyExplore(false);
     setPanel(null);
   };
+  const removePart = (id: string) => {
+    setState((s) =>
+      s.removed.includes(id) ? s : { ...s, removed: [...s.removed, id] },
+    );
+  };
+  const toggleKnife = () => {
+    setDetails(false);
+    setPanel(null);
+    setLightOpen(false);
+    setAbout(false);
+    setChosen(null);
+    setState((s) =>
+      s.knife
+        ? { ...s, knife: false, rotate: false }
+        : {
+            ...s,
+            knife: true,
+            rotate: false,
+            selected: [],
+            isolate: false,
+            context: undefined,
+            frame: undefined,
+          },
+    );
+  };
   const openPanel = (next: "layers" | "search") => {
     setDetails(false);
+    setLightOpen(false);
     setPanel((p) => (p === next ? null : next));
   };
+  const setLight = (key: keyof Lighting, value: number) =>
+    setLighting((current) => ({ ...current, [key]: value }));
   return (
     <main className={`studio${studyExplore ? " study-explore" : ""}`}>
       {atlas && (
         <AnatomyScene
           atlas={atlas}
+          lighting={lighting}
           state={{
             ...state,
             inspectorOpen: !studyExplore && details && selectedParts.length > 0,
           }}
           onSelect={choosePart}
+          onRemove={removePart}
           onProgress={(n) => {
             setProgress(n);
             if (n === 100) setError("");
@@ -323,11 +377,26 @@ export default function Home() {
         </Button>
         <Button
           variant="ghost"
+          className={`icon-button${lightOpen ? " active" : ""}`}
+          aria-label="Lighting"
+          aria-expanded={lightOpen}
+          onClick={() => {
+            setDetails(false);
+            setPanel(null);
+            setAbout(false);
+            setLightOpen((open) => !open);
+          }}
+        >
+          <Sun size={18} />
+        </Button>
+        <Button
+          variant="ghost"
           className="icon-button"
           aria-label="About this atlas"
           onClick={() => {
             setDetails(false);
             setPanel(null);
+            setLightOpen(false);
             setAbout(true);
           }}
         >
@@ -521,6 +590,48 @@ export default function Home() {
           </p>
         </section>
       )}
+      {lightOpen && !studyExplore && (
+        <section className="light-panel glass" aria-label="Lighting">
+          <div className="panel-heading">
+            <span>Light</span>
+            <Button
+              variant="ghost"
+              className="icon-button"
+              onClick={() => setLightOpen(false)}
+              aria-label="Close lighting"
+            >
+              <X size={16} />
+            </Button>
+          </div>
+          <div className="light-rows">
+            {LIGHT_ROWS.map((row) => (
+              <div className="light-row" key={row.key}>
+                <label id={`light-${row.key}`}>{row.label}</label>
+                <Slider
+                  aria-labelledby={`light-${row.key}`}
+                  min={row.min}
+                  max={row.max}
+                  step={0.01}
+                  value={[lighting[row.key]]}
+                  onValueChange={(value) =>
+                    setLight(row.key, Array.isArray(value) ? value[0] : value)
+                  }
+                />
+                <output>{lighting[row.key].toFixed(2)}</output>
+              </div>
+            ))}
+          </div>
+          <div className="panel-foot">
+            <span>Studio setup</span>
+            <Button
+              variant="ghost"
+              onClick={() => setLighting(DEFAULT_LIGHTING)}
+            >
+              Reset
+            </Button>
+          </div>
+        </section>
+      )}
       <nav className="view-controls glass" aria-label="Camera controls">
         {(["three-quarter", "front", "side", "back"] as View[]).map((v, i) => (
           <Button
@@ -546,13 +657,39 @@ export default function Home() {
         <i />
         <Button
           variant="ghost"
-          disabled={state.explode >= 0.4}
+          disabled={state.explode >= 0.4 || state.knife}
           aria-label={state.rotate ? "Pause rotation" : "Rotate body"}
           title="Auto rotate"
           className={state.rotate ? "active" : ""}
           onClick={() => setState((s) => ({ ...s, rotate: !s.rotate }))}
         >
           {state.rotate ? <Pause size={17} /> : <RotateCw size={18} />}
+        </Button>
+        <Button
+          variant="ghost"
+          aria-pressed={state.knife}
+          aria-label={state.knife ? "Turn off knife mode" : "Knife mode"}
+          title={
+            state.knife
+              ? "Knife mode — click a structure to remove it"
+              : "Knife mode"
+          }
+          className={state.knife ? "active" : ""}
+          onClick={toggleKnife}
+        >
+          <svg className="size-[18px]" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M1.6 2.2 15.2 12.8 11.5 16.8 3.6 8.6Z"
+            />
+            <path
+              d="M13 15.6 22.2 23"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3.6"
+              strokeLinecap="round"
+            />
+          </svg>
         </Button>
         <Button
           variant="ghost"
@@ -566,13 +703,17 @@ export default function Home() {
       <div className="scene-caption">
         <span className="caption-line" />
         <span>
-          {state.isolate
-            ? (chosen?.name ?? "SELECTED STRUCTURE")
-            : state.explode > 0.95
-              ? "ANATOMICAL INVENTORY"
-              : state.explode > 0.05
-                ? "SEPARATED STRUCTURES"
-                : "ADULT HUMAN · MALE"}
+          {state.removed.length
+            ? `${state.removed.length} REMOVED`
+            : state.knife
+              ? "KNIFE"
+              : state.isolate
+                ? (chosen?.name ?? "SELECTED STRUCTURE")
+                : state.explode > 0.95
+                  ? "ANATOMICAL INVENTORY"
+                  : state.explode > 0.05
+                    ? "SEPARATED STRUCTURES"
+                    : "ADULT HUMAN · MALE"}
         </span>
         <span className="caption-line" />
       </div>
@@ -628,14 +769,24 @@ export default function Home() {
       )}
       <footer className="studio-footer">
         <span>
-          {state.explode > 0.8 ? "Drag to pan" : "Drag to orbit"} <b>·</b> Pinch
-          to zoom <b>·</b> Tap to inspect
+          {state.knife ? (
+            <>
+              Knife mode <b>·</b> Click a structure to remove it <b>·</b> Reset
+              restores
+            </>
+          ) : (
+            <>
+              {state.explode > 0.8 ? "Drag to pan" : "Drag to orbit"} <b>·</b>{" "}
+              Pinch to zoom <b>·</b> Tap to inspect
+            </>
+          )}
         </span>
         <Button
           variant="ghost"
           onClick={() => {
             setDetails(false);
             setPanel(null);
+            setLightOpen(false);
             setAbout(true);
           }}
         >

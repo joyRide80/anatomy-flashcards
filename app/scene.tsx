@@ -6,26 +6,34 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { createExplosionLayout } from "./explosion-layout";
 import { decodeModelResponse } from "./model-download";
 import { PointerTap } from "./pointer-tap";
-import { SYSTEMS, type Atlas, type SceneState } from "./anatomy";
+import { SYSTEMS, type Atlas, type Lighting, type SceneState } from "./anatomy";
 interface Props {
   atlas: Atlas;
   state: SceneState;
+  lighting: Lighting;
   onSelect: (id: string) => void;
+  onRemove: (id: string) => void;
   onProgress: (n: number) => void;
   onError: (s: string) => void;
 }
 export default function AnatomyScene({
   atlas,
   state,
+  lighting,
   onSelect,
+  onRemove,
   onProgress,
   onError,
 }: Props) {
   const host = useRef<HTMLDivElement>(null),
     latest = useRef(state),
-    select = useRef(onSelect);
+    select = useRef(onSelect),
+    remove = useRef(onRemove),
+    lightingRef = useRef(lighting);
   latest.current = state;
   select.current = onSelect;
+  remove.current = onRemove;
+  lightingRef.current = lighting;
   useEffect(() => {
     const el = host.current!;
     let disposed = false,
@@ -58,7 +66,7 @@ export default function AnatomyScene({
     renderer.setClearColor("#f2f3f3");
     renderer.outputColorSpace = T.SRGBColorSpace;
     renderer.toneMapping = T.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.12;
+    renderer.toneMappingExposure = lightingRef.current.exposure;
     el.appendChild(renderer.domElement);
     renderer.domElement.setAttribute(
       "aria-label",
@@ -78,32 +86,46 @@ export default function AnatomyScene({
       dirty = true;
     });
     const pmrem = new T.PMREMGenerator(renderer),
-      room = new RoomEnvironment(),
-      env = pmrem.fromScene(room, 0.04);
+      room = new RoomEnvironment();
+    let softness = lightingRef.current.softness;
+    let env = pmrem.fromScene(room, softness);
     scene.environment = env.texture;
-    room.dispose();
-    pmrem.dispose();
-    scene.add(new T.HemisphereLight(0xffffff, 0xa7acb2, 1.05));
-    const key = new T.DirectionalLight(0xfffaf4, 2.3);
-    key.position.set(-2, 4, 3);
-    scene.add(key);
-    const rim = new T.DirectionalLight(0xe9f0ff, 1.8);
+    const hemisphere = new T.HemisphereLight(
+      0xf4f1ea,
+      0x6e655c,
+      lightingRef.current.hemisphere,
+    );
+    scene.add(hemisphere);
+    const keyLight = new T.DirectionalLight(0xfffaf4, lightingRef.current.key);
+    keyLight.position.set(-2.5, 5, 2.2);
+    scene.add(keyLight);
+    const fill = new T.DirectionalLight(0xf3efe8, lightingRef.current.fill);
+    fill.position.set(2.6, 2.4, 2.2);
+    scene.add(fill);
+    const rim = new T.DirectionalLight(0xe9f0ff, lightingRef.current.rim);
     rim.position.set(2, 2, -3);
     scene.add(rim);
-    const ground = new T.Mesh(
-      new T.CircleGeometry(30, 96),
-      new T.MeshStandardMaterial({ color: 0xd5d9dc, roughness: 1 }),
-    );
+    const envMaterials: T.MeshStandardMaterial[] = [];
+    const groundMaterial = new T.MeshStandardMaterial({
+      color: 0xd5d9dc,
+      roughness: 1,
+      envMapIntensity: lightingRef.current.environment,
+    });
+    envMaterials.push(groundMaterial);
+    const ground = new T.Mesh(new T.CircleGeometry(30, 96), groundMaterial);
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.019;
     scene.add(ground);
+    const platformMaterial = new T.MeshStandardMaterial({
+      color: 0xeeeeec,
+      metalness: 0.12,
+      roughness: 0.67,
+      envMapIntensity: lightingRef.current.environment,
+    });
+    envMaterials.push(platformMaterial);
     const platform = new T.Mesh(
       new T.CylinderGeometry(0.68, 0.7, 0.028, 100),
-      new T.MeshStandardMaterial({
-        color: 0xeeeeec,
-        metalness: 0.12,
-        roughness: 0.67,
-      }),
+      platformMaterial,
     );
     platform.position.y = -0.016;
     scene.add(platform);
@@ -225,11 +247,13 @@ export default function AnatomyScene({
         color: SYSTEMS.find((s) => s.id === system)?.color ?? "#aebbb8",
         metalness: 0.08,
         roughness: 0.53,
+        envMapIntensity: lightingRef.current.environment,
         side: T.DoubleSide,
         transparent: system === "integumentary",
         opacity: system === "integumentary" ? 0.1 : 1,
         depthWrite: system !== "integumentary",
       });
+      envMaterials.push(m);
       m.onBeforeCompile = (shader) => {
         shader.uniforms.partState = { value: partTexture };
         shader.uniforms.selectionState = { value: selectionTexture };
@@ -286,12 +310,14 @@ export default function AnatomyScene({
     const veilColor = new T.MeshStandardMaterial({
       color: "#b08479",
       roughness: 0.6,
+      envMapIntensity: lightingRef.current.environment,
       transparent: true,
       opacity: 0.32,
       depthWrite: false,
       depthFunc: T.EqualDepth,
       side: T.DoubleSide,
     });
+    envMaterials.push(veilColor);
     veilDepth.onBeforeCompile = veilCompile;
     veilColor.onBeforeCompile = veilCompile;
     materials.push(veilDepth, veilColor);
@@ -474,6 +500,8 @@ export default function AnatomyScene({
     };
     const move = (e: PointerEvent) => {
       tap.move(e.pointerId, e.clientX, e.clientY);
+      const knife = latest.current.knife;
+      if (knife) renderer.domElement.style.cursor = "";
       if (e.buttons || amount < 0.5 || e.pointerType === "touch") {
         hover.hidden = true;
         return;
@@ -483,7 +511,8 @@ export default function AnatomyScene({
         y = e.clientY - rect.top,
         index = findTarget(x, y, 12);
       hover.hidden = index < 0;
-      renderer.domElement.style.cursor = index < 0 ? "grab" : "pointer";
+      if (!knife)
+        renderer.domElement.style.cursor = index < 0 ? "grab" : "pointer";
       if (index >= 0) {
         hover.textContent = atlas.parts[index].name;
         hover.style.left = `${Math.max(8, Math.min(x + 14, el.clientWidth - 260))}px`;
@@ -528,7 +557,9 @@ export default function AnatomyScene({
         );
       if (found >= 0) {
         hover.hidden = true;
-        select.current(atlas.parts[found].id);
+        const id = atlas.parts[found].id;
+        if (latest.current.knife) remove.current(id);
+        else select.current(id);
       }
     };
     renderer.domElement.addEventListener("pointerdown", down);
@@ -537,9 +568,34 @@ export default function AnatomyScene({
     renderer.domElement.addEventListener("pointercancel", cancel);
     const clock = new T.Clock();
     let lastExtent = -1;
+    const lightKey = (l: Lighting) =>
+      `${l.exposure}|${l.environment}|${l.softness}|${l.hemisphere}|${l.key}|${l.fill}|${l.rim}`;
+    let appliedLight = lightKey(lightingRef.current);
+    const syncLighting = () => {
+      const l = lightingRef.current;
+      const next = lightKey(l);
+      if (next === appliedLight) return;
+      appliedLight = next;
+      renderer.toneMappingExposure = l.exposure;
+      hemisphere.intensity = l.hemisphere;
+      keyLight.intensity = l.key;
+      fill.intensity = l.fill;
+      rim.intensity = l.rim;
+      for (const material of envMaterials)
+        material.envMapIntensity = l.environment;
+      if (Math.abs(l.softness - softness) > 0.0001) {
+        const nextEnv = pmrem.fromScene(room, l.softness);
+        env.dispose();
+        env = nextEnv;
+        scene.environment = env.texture;
+        softness = l.softness;
+      }
+      dirty = true;
+    };
     const animate = () => {
       if (disposed) return;
       frame = requestAnimationFrame(animate);
+      syncLighting();
       const dt = Math.min(clock.getDelta(), 0.05),
         s = latest.current;
       const changed =
@@ -547,7 +603,8 @@ export default function AnatomyScene({
         lastState?.selected !== s.selected ||
         lastState?.isolate !== s.isolate ||
         lastState?.context !== s.context ||
-        lastState?.frame !== s.frame;
+        lastState?.frame !== s.frame ||
+        lastState?.removed !== s.removed;
       const moving = Math.abs(amount - s.explode) > 0.0001;
       if (moving) {
         amount = T.MathUtils.damp(amount, s.explode, 8, dt);
@@ -556,7 +613,8 @@ export default function AnatomyScene({
       if (changed || moving || lastExtent < 0) {
         const visible = new Set(s.visible),
           selection = new Set(s.selected),
-          context = new Set(s.context ?? []);
+          context = new Set(s.context ?? []),
+          removed = new Set(s.removed);
         let showVeil = false;
         const visibleParts = atlas.parts.filter((p) =>
           s.isolate
@@ -608,17 +666,19 @@ export default function AnatomyScene({
             dz = T.MathUtils.lerp(Math.cos(angle) * 0.48, -c.z, t);
           }
           const selected = selection.has(p.id);
-          const alpha = s.isolate
-            ? selected
-              ? 1
-              : context.has(p.id)
-                ? p.system === "muscular"
-                  ? 0.65
-                  : 1
-                : 0
-            : visible.has(p.system) || selected
-              ? 1
-              : 0;
+          const alpha = removed.has(p.id)
+            ? 0
+            : s.isolate
+              ? selected
+                ? 1
+                : context.has(p.id)
+                  ? p.system === "muscular"
+                    ? 0.65
+                    : 1
+                  : 0
+              : visible.has(p.system) || selected
+                ? 1
+                : 0;
           if (alpha > 0.5 && alpha < 0.9) showVeil = true;
           data.set([dx, dy, dz, alpha], i * 4);
           selectedData[i * 4] = selected ? 255 : 0;
@@ -756,7 +816,7 @@ export default function AnatomyScene({
         innerRing.visible =
           amount < 0.5 && !s.isolate;
       markers.visible = amount > 0.75;
-      controls.autoRotate = s.rotate && !s.isolate && amount < 0.4;
+      controls.autoRotate = s.rotate && !s.knife && !s.isolate && amount < 0.4;
       controls.autoRotateSpeed = 0.65;
       controls.update();
       if (controls.autoRotate) dirty = true;
@@ -833,6 +893,16 @@ export default function AnatomyScene({
         }
       });
       env.dispose();
+      room.traverse((object) => {
+        if (object instanceof T.Mesh) {
+          object.geometry.dispose();
+          const roomMaterials = Array.isArray(object.material)
+            ? object.material
+            : [object.material];
+          roomMaterials.forEach((material) => material.dispose());
+        }
+      });
+      pmrem.dispose();
       partTexture.dispose();
       selectionTexture.dispose();
       markerGeometry.dispose();
@@ -842,5 +912,16 @@ export default function AnatomyScene({
       renderer.domElement.remove();
     };
   }, [atlas]);
-  return <div className="scene" ref={host} />;
+  useEffect(() => {
+    const canvas = host.current?.querySelector("canvas");
+    if (!(canvas instanceof HTMLCanvasElement)) return;
+    canvas.style.cursor = "";
+    canvas.setAttribute(
+      "aria-label",
+      state.knife
+        ? "Knife mode. Click a structure to remove it. Reset restores removed structures."
+        : "Interactive human anatomy. Drag to orbit, pinch or scroll to zoom, and tap a structure to inspect it.",
+    );
+  }, [state.knife]);
+  return <div ref={host} className={state.knife ? "scene knife" : "scene"} />;
 }

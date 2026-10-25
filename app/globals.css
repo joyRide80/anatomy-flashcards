@@ -492,6 +492,74 @@ h1 .edition {
   padding: 12px 18px 16px;
   z-index: 20;
 }
+.light-panel {
+  position: absolute;
+  top: 94px;
+  right: 88px;
+  width: 272px;
+  z-index: 20;
+  border-radius: 6px;
+  padding: 14px 16px 0;
+  max-height: min(520px, calc(100dvh - 200px));
+  overflow: auto;
+}
+.light-panel .panel-heading .icon-button {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 6px;
+}
+.light-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 0 4px;
+}
+.light-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) 36px;
+  gap: 8px;
+  align-items: center;
+  min-height: 34px;
+}
+.light-row label {
+  font-size: 12px;
+  color: #3c4956;
+}
+.light-row output {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: #263b48;
+}
+.light-row [data-slot="slider"] {
+  padding: 12px 0;
+}
+.light-row [data-slot="slider-track"] {
+  height: 2px;
+  background: #d5dde3;
+}
+.light-row [data-slot="slider-range"] {
+  background: #536875;
+}
+.light-row [data-slot="slider-thumb"] {
+  border-color: #8ea0ad;
+  background: white;
+  box-shadow: 0 1px 2px #18253618;
+}
+.light-panel .panel-foot {
+  position: sticky;
+  bottom: 0;
+  background: #ffffffeb;
+}
+.top-actions .active {
+  color: #263b48;
+  background: #263b4812;
+}
+@media (min-width: 768px) {
+  body:has(.detail-sheet) .light-panel {
+    right: 420px;
+  }
+}
 .search-panel [data-slot="input-group"] {
   margin-top: 9px;
   background: #18253605;
@@ -1052,6 +1120,12 @@ body:has(.detail-sheet) [data-slot="sheet-overlay"] {
 }
 .scene canvas:active {
   cursor: grabbing;
+}
+.scene.knife canvas,
+.scene.knife canvas:active {
+  cursor:
+    url("/cursors/knife.png") 7 6,
+    crosshair;
 }
 @media (min-width: 768px) and (max-width: 1100px) {
   body:has(.detail-sheet) .layers-panel {
@@ -1936,13 +2010,26 @@ h1 .edition {
   .view-controls {
     top: max(120px, calc(env(safe-area-inset-top) + 102px));
   }
+  .view-controls button {
+    width: 38px;
+  }
 }
 @media (max-width: 767px) {
   body:has(.layers-panel.mobile-open) .view-controls,
   body:has(.layers-panel.mobile-open) .scene-caption,
   body:has(.search-panel) .view-controls,
-  body:has(.search-panel) .scene-caption {
+  body:has(.search-panel) .scene-caption,
+  body:has(.light-panel) .view-controls,
+  body:has(.light-panel) .scene-caption {
     visibility: hidden;
+  }
+  .light-panel {
+    top: auto;
+    right: 12px;
+    left: 12px;
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + 124px);
+    width: auto;
+    max-height: min(420px, 52dvh);
   }
   .studio-footer {
     display: none;

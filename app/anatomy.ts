@@ -155,6 +155,25 @@ export interface Atlas {
   triangles: number;
 }
 export type View = "three-quarter" | "front" | "back" | "side";
+/** Studio lighting. Intensities are three.js light and environment units. */
+export interface Lighting {
+  exposure: number;
+  environment: number;
+  softness: number;
+  hemisphere: number;
+  key: number;
+  fill: number;
+  rim: number;
+}
+export const DEFAULT_LIGHTING: Lighting = {
+  exposure: 1,
+  environment: 0.4,
+  softness: 0.6,
+  hemisphere: 0.35,
+  key: 1.5,
+  fill: 0.3,
+  rim: 0.6,
+};
 export interface SceneState {
   inspectorOpen?: boolean;
   explode: number;
@@ -164,6 +183,9 @@ export interface SceneState {
   view: View;
   rotate: boolean;
   reset: number;
+  /** Piece ids hidden by knife mode. Reset clears this list. */
+  removed: string[];
+  knife: boolean;
   context?: string[];
   frame?: string[];
 }
