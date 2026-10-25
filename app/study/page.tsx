@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "./study.css";
 import {
   cachedDecks,
@@ -22,6 +22,19 @@ import { prepareVoices } from "./speech";
 import { Session } from "./session";
 import { prefillItems } from "./lists";
 import { CATEGORY_LABEL, latinName } from "./shared";
+
+/** Cookie backups omit card labels. The catalogue fills them back in. */
+function fillLabels(decks: Deck[], catalog: Catalog): Deck[] {
+  const structures = new Map(catalog.structures.map((s) => [s.id, s]));
+  return decks.map((deck) => ({
+    ...deck,
+    items: deck.items.map((item) => {
+      if (item.label) return item;
+      const structure = structures.get(item.structureId);
+      return structure ? { ...item, label: latinName(structure) } : item;
+    }),
+  }));
+}
 
 type Screen =
   | { name: "library" }
@@ -102,10 +115,11 @@ export default function StudyPage() {
   );
   const [screen, setScreen] = useState<Screen>({ name: "library" });
   const [error, setError] = useState("");
+  const catalogRef = useRef<Catalog | null>(null);
 
   const refresh = useCallback(async () => {
     const [d, p] = await Promise.all([listDecks(), listProgress()]);
-    setDecks(d);
+    setDecks(catalogRef.current ? fillLabels(d, catalogRef.current) : d);
     setProgress(Object.fromEntries(p.map((x) => [x.deckId, x])));
   }, []);
 
@@ -123,6 +137,7 @@ export default function StudyPage() {
       })
       .then(async (catalog) => {
         if (cancelled) return;
+        catalogRef.current = catalog;
         setCatalog(catalog);
         try {
           await ensureDefaultDecks(catalog);

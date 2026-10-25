@@ -5,15 +5,20 @@ const VERSION = 1;
 const EXPORT_FORMAT = "human-atlas-flashcards";
 
 /**
- * Mobile Safari often drops IndexedDB on refresh (the write is reported as
- * committed, then the database is empty after reload). Deck lists are small,
- * so a synchronous localStorage copy is what actually survives that reload.
- * After the first successful read, the copy is the source of truth.
+ * iOS Safari keeps localStorage and IndexedDB in the tab process. Force-quitting
+ * Safari discards writes that have not been flushed. Cookies live in a separate
+ * store and survive that quit. Deck snapshots are cookie-backed under /state/
+ * so card images are not sent with a large Cookie header.
  */
 const DECKS_KEY = "human-atlas-flashcards-decks";
 const PROGRESS_KEY = "human-atlas-flashcards-progress";
 const READY_KEY = "human-atlas-flashcards-ready";
+const REV_KEY = "human-atlas-flashcards-rev";
 const IDB_TIMEOUT_MS = 2500;
+const COOKIE_CHUNK = 3000;
+const COOKIE_SLOTS = 8;
+/** Stay under the server header limit on the one request that sends these cookies. */
+const COOKIE_BUDGET = 12000;
 
 const STORAGE_ERROR =
   "This browser blocked local storage, so decks cannot be saved.";
@@ -21,7 +26,6 @@ const STORAGE_ERROR =
 type StampedProgress = DeckProgress & { savedAt?: number };
 
 let opening: Promise<IDBDatabase> | null = null;
-let migrating: Promise<void> | null = null;
 let askedToPersist = false;
 
 function browserStorage(): Storage | null {
@@ -158,30 +162,152 @@ function reconcileProgress(
   );
 }
 
+function readRev() {
+  const store = browserStorage();
+  if (!store) return 0;
+  try {
+    const rev = Number(store.getItem(REV_KEY));
+    return Number.isFinite(rev) ? rev : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function setRev(rev: number) {
+  const store = browserStorage();
+  if (!store) return;
+  try {
+    store.setItem(REV_KEY, String(rev));
+  } catch {
+    // The cookie snapshot still carries the revision.
+  }
+}
+
+function cookieSuffix() {
+  const secure =
+    typeof location !== "undefined" && location.protocol === "https:"
+      ? "; Secure"
+      : "";
+  return `; Path=/state/; SameSite=Lax${secure}`;
+}
+
+function clearRootCookies() {
+  if (typeof document === "undefined") return;
+  for (let i = 0; i < 24; i++) {
+    document.cookie = `ha${i}=; Path=/; Max-Age=0; SameSite=Lax`;
+  }
+}
+
+clearRootCookies();
+
+function slimDeck(deck: Deck): Deck {
+  return {
+    ...deck,
+    items: deck.items.map((item) => {
+      const slim: Deck["items"][number] = {
+        structureId: item.structureId,
+        label: "",
+      };
+      if (item.note) slim.note = item.note;
+      const { label: _label, ...stored } = slim;
+      return stored as Deck["items"][number];
+    }),
+  };
+}
+
+/** Writes the snapshot under /state/ so it is not attached to image requests. */
+function writeCookieSnapshot(payload: unknown) {
+  if (typeof document === "undefined") return false;
+  let encoded: string;
+  try {
+    encoded = encodeURIComponent(JSON.stringify(payload));
+  } catch {
+    return false;
+  }
+  if (encoded.length > COOKIE_BUDGET) return false;
+  const count = Math.max(1, Math.ceil(encoded.length / COOKIE_CHUNK));
+  if (count > COOKIE_SLOTS) return false;
+  const keep = cookieSuffix();
+  try {
+    for (let i = 0; i < count; i++) {
+      const value = encoded.slice(i * COOKIE_CHUNK, (i + 1) * COOKIE_CHUNK);
+      document.cookie = `ha${i}=${value}; Max-Age=31536000${keep}`;
+    }
+    for (let i = count; i < 24; i++) {
+      document.cookie = `ha${i}=; Max-Age=0${keep}`;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function packsFor(decks: Deck[], progress: StampedProgress[], rev: number) {
+  const custom = decks
+    .filter((deck) => !deck.id.startsWith("default-"))
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+  const packs: {
+    rev: number;
+    complete: boolean;
+    decks: Deck[];
+    progress: StampedProgress[];
+  }[] = [];
+  const push = (list: Deck[], complete: boolean) => {
+    const ids = new Set(list.map((deck) => deck.id));
+    packs.push({
+      rev,
+      complete,
+      decks: list,
+      progress: progress.filter((item) => ids.has(item.deckId)),
+    });
+    packs.push({ rev, complete, decks: list, progress: [] });
+  };
+  push(custom, true);
+  push(custom.map(slimDeck), true);
+  for (let n = custom.length - 1; n >= 0; n--)
+    push(custom.slice(0, n).map(slimDeck), false);
+  return packs;
+}
+
+function snapshot(decks: Deck[], progress: StampedProgress[]) {
+  const rev = Date.now();
+  const hasCustom = decks.some((deck) => !deck.id.startsWith("default-"));
+  for (const pack of packsFor(decks, progress, rev)) {
+    if (hasCustom && pack.decks.length === 0) continue;
+    if (writeCookieSnapshot(pack)) return rev;
+  }
+  return null;
+}
+
+function commit(decks: Deck[], progress: StampedProgress[]) {
+  const local =
+    writeJson(DECKS_KEY, decks) && writeJson(PROGRESS_KEY, progress);
+  const rev = snapshot(decks, progress);
+  // A failed local write must leave the revision behind the cookie, so the
+  // next launch replaces the empty browser storage with the cookie snapshot.
+  if (local) setRev(rev ?? Date.now());
+  return local || rev !== null;
+}
+
 function upsertDeck(deck: Deck) {
-  return writeJson(DECKS_KEY, [
-    ...readDecks().filter((item) => item.id !== deck.id),
-    deck,
-  ]);
+  return commit(
+    [...readDecks().filter((item) => item.id !== deck.id), deck],
+    readProgress(),
+  );
 }
 
 function upsertProgress(progress: StampedProgress) {
-  return writeJson(PROGRESS_KEY, [
+  return commit(readDecks(), [
     ...readProgress().filter((item) => item.deckId !== progress.deckId),
     progress,
   ]);
 }
 
 function forgetDeck(deckId: string) {
-  const decksOk = writeJson(
-    DECKS_KEY,
+  return commit(
     readDecks().filter((deck) => deck.id !== deckId),
-  );
-  const progressOk = writeJson(
-    PROGRESS_KEY,
     readProgress().filter((progress) => progress.deckId !== deckId),
   );
-  return decksOk && progressOk;
 }
 
 function requestPersistence() {
@@ -392,17 +518,157 @@ async function idbPutBackup(backup: Backup) {
   });
 }
 
+let frame: HTMLIFrameElement | null = null;
+let frameReady: Promise<void> | null = null;
+let booted: Promise<void> | null = null;
+let cookieReadOk = false;
+let didBoot = false;
+const cookieWaits = new Map<number, (cookie: string) => void>();
+let cookieWaitId = 1;
+
+function onCookieMessage(event: MessageEvent) {
+  if (event.origin !== location.origin) return;
+  if (event.data?.type !== "ha-cookie") return;
+  const done = cookieWaits.get(event.data.id);
+  if (!done) return;
+  cookieWaits.delete(event.data.id);
+  done(typeof event.data.cookie === "string" ? event.data.cookie : "");
+}
+
+function ensureFrame() {
+  if (frameReady) return frameReady;
+  if (typeof document === "undefined") {
+    return Promise.reject(new Error("No document"));
+  }
+  frameReady = new Promise((resolve, reject) => {
+    const iframe = document.createElement("iframe");
+    frame = iframe;
+    iframe.src = "/state/index.html";
+    iframe.hidden = true;
+    iframe.tabIndex = -1;
+    iframe.setAttribute("aria-hidden", "true");
+    iframe.style.cssText = "position:absolute;width:0;height:0;border:0";
+    const timer = setTimeout(
+      () => reject(new Error("Cookie frame timed out")),
+      4000,
+    );
+    const ready = (event: MessageEvent) => {
+      if (event.origin !== location.origin || event.data?.type !== "ha-ready")
+        return;
+      clearTimeout(timer);
+      window.removeEventListener("message", ready);
+      resolve();
+    };
+    window.addEventListener("message", onCookieMessage);
+    window.addEventListener("message", ready);
+    iframe.onerror = () => {
+      clearTimeout(timer);
+      reject(new Error("Cookie frame failed"));
+    };
+    document.documentElement.appendChild(iframe);
+  });
+  frameReady = frameReady.catch((error) => {
+    frameReady = null;
+    throw error;
+  });
+  return frameReady;
+}
+
+function readCookieHeader() {
+  return ensureFrame().then(
+    () =>
+      new Promise<string | null>((resolve) => {
+        const win = frame?.contentWindow;
+        if (!win) {
+          resolve(null);
+          return;
+        }
+        const id = cookieWaitId++;
+        const timer = setTimeout(() => {
+          cookieWaits.delete(id);
+          resolve(null);
+        }, 2000);
+        cookieWaits.set(id, (cookie) => {
+          clearTimeout(timer);
+          resolve(cookie);
+        });
+        win.postMessage({ type: "ha-read", id }, location.origin);
+      }),
+    () => null,
+  );
+}
+
+function decodeCookieSnapshot(header: string) {
+  const parts = new Map<number, string>();
+  for (const piece of header.split(";")) {
+    const trimmed = piece.trim();
+    const eq = trimmed.indexOf("=");
+    if (eq < 0) continue;
+    const name = trimmed.slice(0, eq);
+    if (!/^ha\d+$/.test(name)) continue;
+    parts.set(Number(name.slice(2)), trimmed.slice(eq + 1));
+  }
+  if (!parts.has(0)) return null;
+  let encoded = "";
+  for (let i = 0; parts.has(i); i++) encoded += parts.get(i);
+  try {
+    return JSON.parse(decodeURIComponent(encoded)) as {
+      rev?: number;
+      complete?: boolean;
+      decks?: unknown;
+      progress?: unknown;
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** If Safari discarded localStorage on quit, the cookie snapshot is newer. */
+async function restoreCookies() {
+  const header = await readCookieHeader();
+  if (header == null) return;
+  cookieReadOk = true;
+  const data = decodeCookieSnapshot(header);
+  if (!data) return;
+  const rev = typeof data.rev === "number" ? data.rev : 0;
+  if (rev <= readRev()) return;
+  const incoming = Array.isArray(data.decks) ? data.decks.filter(isDeck) : [];
+  const progress = Array.isArray(data.progress)
+    ? data.progress.filter(isProgress)
+    : [];
+  const ids = new Set(incoming.map((deck) => deck.id));
+  const kept = data.complete
+    ? readDecks().filter(
+        (deck) => deck.id.startsWith("default-") || ids.has(deck.id),
+      )
+    : readDecks();
+  writeJson(DECKS_KEY, mergeDecks(kept, incoming));
+  writeJson(PROGRESS_KEY, mergeProgress(readProgress(), progress));
+  setRev(rev);
+  if (incoming.length || kept.length) markReady();
+}
+
 /** Copy any IndexedDB-only decks into localStorage once. Failures stay unready and retry. */
 function ensureMigrated() {
-  if (mirrorReady()) return Promise.resolve();
-  if (!migrating) {
-    const decksBefore = readDecks();
-    const progressBefore = readProgress();
-    migrating = migrate(decksBefore, progressBefore).finally(() => {
-      migrating = null;
-    });
+  booted ??= boot();
+  return booted;
+}
+
+async function boot() {
+  try {
+    await restoreCookies();
+    if (!mirrorReady()) await migrate(readDecks(), readProgress());
+    const decks = readDecks();
+    const progress = readProgress();
+    if (cookieReadOk && (decks.length || progress.length)) {
+      const rev = snapshot(decks, progress);
+      if (rev !== null) setRev(rev);
+    }
+    didBoot = true;
+  } catch (error) {
+    booted = null;
+    throw error;
   }
-  return migrating;
 }
 
 async function migrate(decksBefore: Deck[], progressBefore: StampedProgress[]) {
@@ -419,8 +685,27 @@ async function migrate(decksBefore: Deck[], progressBefore: StampedProgress[]) {
     idbProgress,
     readProgress(),
   );
-  if (writeJson(DECKS_KEY, decks) && writeJson(PROGRESS_KEY, progress))
+  if (writeJson(DECKS_KEY, decks) && writeJson(PROGRESS_KEY, progress)) {
     markReady();
+    const rev = snapshot(decks, progress);
+    if (rev !== null) setRev(rev);
+  }
+}
+
+function flushSnapshot() {
+  if (!didBoot) return;
+  const decks = readDecks();
+  const progress = readProgress();
+  if (!decks.length && !progress.length) return;
+  const rev = snapshot(decks, progress);
+  if (rev !== null) setRev(rev);
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", flushSnapshot);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushSnapshot();
+  });
 }
 
 function backfillDecks(decks: Deck[]) {
@@ -590,9 +875,10 @@ export async function importBackup(data: unknown): Promise<number> {
     ...progress,
     savedAt: Date.now(),
   }));
-  const mirrored =
-    writeJson(DECKS_KEY, mergeDecks(readDecks(), backup.decks)) &&
-    writeJson(PROGRESS_KEY, mergeProgress(readProgress(), stamped));
+  const mirrored = commit(
+    mergeDecks(readDecks(), backup.decks),
+    mergeProgress(readProgress(), stamped),
+  );
   if (mirrored) markReady();
   const stored = await idbPutBackup(backup);
   if (browserStorage() && !mirrored) throw new Error(STORAGE_ERROR);

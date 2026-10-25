@@ -1,0 +1,18 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title></title>
+<script>
+  // Same-origin frame used only to read cookies stored under /state/.
+  // Those cookies are not attached to card images or the atlas.
+  if (parent !== window) {
+    window.addEventListener("message", (event) => {
+      if (event.origin !== location.origin || event.source !== parent) return;
+      if (event.data?.type !== "ha-read") return;
+      parent.postMessage(
+        { type: "ha-cookie", id: event.data.id, cookie: document.cookie },
+        location.origin,
+      );
+    });
+    parent.postMessage({ type: "ha-ready" }, location.origin);
+  }
+</script>
