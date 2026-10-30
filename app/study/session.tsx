@@ -1,21 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Volume2 } from "lucide-react";
-import {
-  formatInterval,
-  introduce,
-  nextDue,
-  pickNext,
-  schedule,
-} from "@/lib/srs";
-import { recordReview, studyDay } from "@/lib/flashcards/db";
+import { formatInterval, introduce, nextDue, pickNext, schedule } from "@/lib/srs";
+import { studyDay, type LearningEvent } from "@/lib/flashcards/learning-model";
 import { normalizeLatin } from "@/lib/flashcards/latin";
-import type {
-  Catalog,
-  Deck,
-  DeckProgress,
-  Grade,
-  ReviewLog,
-} from "@/lib/flashcards/types";
+import type { Catalog, Deck, DeckProgress, Grade, ReviewLog } from "@/lib/flashcards/types";
 import { ChoiceList } from "./choice";
 import { buildChoices, type Game } from "./choices";
 import { canSpeak, prepareVoices, speakTerms, stopSpeaking } from "./speech";
@@ -36,9 +24,7 @@ function currentDay(p: DeckProgress): DeckProgress {
 }
 
 function returnsIn(interval: string) {
-  return interval === "now"
-    ? "Returns in a moment."
-    : `Returns in ${interval}.`;
+  return interval === "now" ? "Returns in a moment." : `Returns in ${interval}.`;
 }
 
 function RevealedTerm({
@@ -99,28 +85,38 @@ export function Session({
   catalog,
   initial,
   onExit,
-  onSaved,
+  onRecord,
+  saveStatus,
 }: {
   deck: Deck;
   catalog: Catalog;
   initial: DeckProgress;
   onExit: () => void;
-  onSaved: (p: DeckProgress) => void;
+  onRecord: (event: LearningEvent) => Promise<DeckProgress>;
+  saveStatus: string;
 }) {
   const maps = useMemo(() => catalogMaps(catalog), [catalog]);
   const items = useMemo(
     () => deck.items.filter((i) => maps.structures.has(i.structureId)),
     [deck, maps],
   );
-  const itemById = useMemo(
-    () => new Map(items.map((i) => [i.structureId, i])),
-    [items],
-  );
+  const itemById = useMemo(() => new Map(items.map((i) => [i.structureId, i])), [items]);
   const structures = useMemo(
     () => items.map((i) => maps.structures.get(i.structureId)!),
     [items, maps],
   );
-  const [progress, setProgress] = useState(() => currentDay(initial));
+  const inDeck = useCallback(
+    (p: DeckProgress): DeckProgress => ({
+      ...currentDay(p),
+      cards: Object.fromEntries(
+        items
+          .filter((i) => p.cards[i.structureId])
+          .map((i) => [i.structureId, p.cards[i.structureId]]),
+      ),
+    }),
+    [items],
+  );
+  const [progress, setProgress] = useState(() => inDeck(initial));
   const [now, setNow] = useState(() => Date.now());
   const [lastId, setLastId] = useState<string>();
   const [revealed, setRevealed] = useState(false);
@@ -128,6 +124,10 @@ export function Session({
   const [nudge, setNudge] = useState<Recall | null>(null);
   const [viewChoice, setViewChoice] = useState<{ id: string; index: number }>();
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveAttempt, setSaveAttempt] = useState(0);
+  const savingRef = useRef(false);
+  const pendingEvent = useRef<LearningEvent | null>(null);
   const [speaking, setSpeaking] = useState(false);
   const [explore, setExplore] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
@@ -197,12 +197,8 @@ export function Session({
   }, [game, structure, item, deckPool, catalogPool, round]);
 
   // Reviews rotate through the rendered views so the shape is learned, not one picture.
-  const view =
-    viewChoice && viewChoice.id === structure?.id
-      ? viewChoice.index
-      : (card?.reps ?? 0);
-  const setView = (index: number) =>
-    structure && setViewChoice({ id: structure.id, index });
+  const view = viewChoice && viewChoice.id === structure?.id ? viewChoice.index : (card?.reps ?? 0);
+  const setView = (index: number) => structure && setViewChoice({ id: structure.id, index });
 
   useEffect(() => {
     if (next) return;
@@ -229,24 +225,48 @@ export function Session({
   }, [speaking, item, structure, hear]);
 
   const commit = useCallback(
-    (updated: DeckProgress, id: string, log?: ReviewLog) => {
-      setProgress(updated);
-      setLastId(id);
-      setRevealed(false);
-      setViewChoice(undefined);
-      setNudge(null);
-      pickedRef.current = null;
-      setPicked(null);
-      setRound((n) => n + 1);
-      setNow(Date.now());
-      onSaved(updated);
-      recordReview(updated, log).catch((e) =>
+    async (_updated: DeckProgress, id: string, log?: ReviewLog) => {
+      if (savingRef.current) return;
+      savingRef.current = true;
+      setSaving(true);
+      setError("");
+      // Retain the event ID if a save/read is interrupted, so retry cannot double-count it.
+      const event = pendingEvent.current ?? {
+        id:
+          globalThis.crypto?.randomUUID?.() ??
+          `review-${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`,
+        cardId: id,
+        deckId: deck.id,
+        at: log?.at ?? Date.now(),
+        action: log?.grade ?? "introduce",
+        mode: game,
+        schedulerVersion: 1 as const,
+      };
+      pendingEvent.current = event;
+      try {
+        const saved = await onRecord(event);
+        setProgress(inDeck(saved));
+        pendingEvent.current = null;
+        setLastId(id);
+        setRevealed(false);
+        setViewChoice(undefined);
+        setNudge(null);
+        pickedRef.current = null;
+        setPicked(null);
+        setRound((n) => n + 1);
+        setNow(Date.now());
+      } catch (e) {
         setError(
-          e instanceof Error ? e.message : "Progress could not be saved.",
-        ),
-      );
+          `${e instanceof Error ? e.message : "Progress could not be saved."} Your answer has not advanced. Try again.`,
+        );
+        setNudge(null);
+        setSaveAttempt((n) => n + 1);
+      } finally {
+        savingRef.current = false;
+        setSaving(false);
+      }
     },
-    [onSaved],
+    [onRecord, deck.id, game, inDeck],
   );
 
   const learn = useCallback(() => {
@@ -300,9 +320,7 @@ export function Session({
     const updated: DeckProgress = {
       ...p,
       cards: { ...p.cards, [structure.id]: updatedCard },
-      newToday: existing
-        ? p.newToday
-        : { day: p.newToday.day, count: p.newToday.count + 1 },
+      newToday: existing ? p.newToday : { day: p.newToday.day, count: p.newToday.count + 1 },
     };
     commit(updated, structure.id, {
       deckId: deck.id,
@@ -323,7 +341,7 @@ export function Session({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (explore) return;
+      if (explore || savingRef.current || pendingEvent.current) return;
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement ||
@@ -348,12 +366,7 @@ export function Session({
         if ((e.key === " " || e.key === "Enter") && picked) {
           e.preventDefault();
           advanceChoice();
-        } else if (
-          (e.key === "l" || e.key === "L") &&
-          audible &&
-          item &&
-          picked
-        ) {
+        } else if ((e.key === "l" || e.key === "L") && audible && item && picked) {
           e.preventDefault();
           toggleSpeak();
         }
@@ -399,8 +412,7 @@ export function Session({
     advanceChoice,
   ]);
 
-  const showAnswer =
-    game === "choice" ? picked !== null : next?.kind === "learn" || revealed;
+  const showAnswer = game === "choice" ? picked !== null : next?.kind === "learn" || revealed;
   const official = structure ? latinName(structure) : "";
 
   useEffect(() => {
@@ -424,11 +436,7 @@ export function Session({
           formatInterval(
             Math.max(
               0,
-              schedule(
-                card ?? introduce(now),
-                choiceCorrect ? "good" : "again",
-                now,
-              ).due - now,
+              schedule(card ?? introduce(now), choiceCorrect ? "good" : "again", now).due - now,
             ),
           ),
         )
@@ -440,7 +448,14 @@ export function Session({
         <button
           type="button"
           className="back"
-          onClick={onExit}
+          onClick={() => {
+            if (
+              !pendingEvent.current ||
+              confirm("This answer hasn’t been saved. Leave without saving it?")
+            )
+              onExit();
+          }}
+          disabled={saving}
           aria-label="Back to decks"
         >
           <ArrowLeft size={18} />
@@ -449,12 +464,24 @@ export function Session({
           <h2>{deck.name}</h2>
           {game === "choice" && <p className="session-game">Multiple choice</p>}
         </div>
+        <span className="session-save" role="status">
+          {saving ? "Saving review…" : saveStatus}
+        </span>
       </header>
 
       {error && (
-        <p className="study-error" role="alert">
+        <div className="study-error" role="alert">
           {error}
-        </p>
+          <button
+            className="ghost"
+            disabled={saving}
+            onClick={() => {
+              if (pendingEvent.current) void commit(progress, pendingEvent.current.cardId);
+            }}
+          >
+            Retry saving answer
+          </button>
+        </div>
       )}
 
       {!structure || !item ? (
@@ -475,8 +502,8 @@ export function Session({
         </section>
       ) : (
         <SwipeCard
-          key={`${structure.id}-${round}`}
-          enabled={game === "recall" && canSwipe}
+          key={`${structure.id}-${round}-${saveAttempt}`}
+          enabled={game === "recall" && canSwipe && !saving && !error}
           intent={nudge}
           yesWhen={rememberedIn}
           noWhen={forgottenIn}
@@ -490,17 +517,11 @@ export function Session({
             praise={game === "choice" && choiceCorrect}
           />
           <div className="answer">
-            {next!.kind === "learn" && game === "recall" && (
-              <p className="badge-new">New card</p>
-            )}
+            {next!.kind === "learn" && game === "recall" && <p className="badge-new">New card</p>}
             {game === "choice" ? (
               <>
-                {next!.kind === "learn" && !picked && (
-                  <p className="badge-new">New card</p>
-                )}
-                <p className="eyebrow-serif">
-                  {CATEGORY_LABEL[structure.category]}
-                </p>
+                {next!.kind === "learn" && !picked && <p className="badge-new">New card</p>}
+                <p className="eyebrow-serif">{CATEGORY_LABEL[structure.category]}</p>
                 {!picked ? (
                   <>
                     <h3 className="prompt">Which structure is highlighted?</h3>
@@ -509,11 +530,7 @@ export function Session({
                 ) : (
                   <>
                     <p
-                      className={
-                        choiceCorrect
-                          ? "verdict verdict-yes"
-                          : "verdict verdict-no"
-                      }
+                      className={choiceCorrect ? "verdict verdict-yes" : "verdict verdict-no"}
                       role="status"
                     >
                       {choiceCorrect ? "Correct" : "Not this one"}
@@ -547,6 +564,7 @@ export function Session({
                     type="button"
                     className="action"
                     onClick={advanceChoice}
+                    disabled={saving || !!error}
                   >
                     Next <kbd>Space</kbd>
                   </button>
@@ -554,24 +572,16 @@ export function Session({
               </>
             ) : !showAnswer ? (
               <>
-                <p className="eyebrow-serif">
-                  {CATEGORY_LABEL[structure.category]}
-                </p>
+                <p className="eyebrow-serif">{CATEGORY_LABEL[structure.category]}</p>
                 <h3 className="prompt">Name the highlighted structure.</h3>
                 <p className="hint">Say or write the Latin term, then check.</p>
-                <button
-                  type="button"
-                  className="action"
-                  onClick={() => setRevealed(true)}
-                >
+                <button type="button" className="action" onClick={() => setRevealed(true)}>
                   Show answer <kbd>Space</kbd>
                 </button>
               </>
             ) : (
               <>
-                <p className="eyebrow-serif">
-                  {CATEGORY_LABEL[structure.category]}
-                </p>
+                <p className="eyebrow-serif">{CATEGORY_LABEL[structure.category]}</p>
                 <RevealedTerm
                   label={item.label}
                   official={official}
@@ -588,7 +598,12 @@ export function Session({
                   onToggleSpeak={toggleSpeak}
                 />
                 {next!.kind === "learn" && (
-                  <button type="button" className="action" onClick={learn}>
+                  <button
+                    type="button"
+                    className="action"
+                    onClick={learn}
+                    disabled={saving || !!error}
+                  >
                     Got it <kbd>Space</kbd>
                   </button>
                 )}

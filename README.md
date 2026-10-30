@@ -49,7 +49,13 @@ The optional WebMCP tools expose anatomy search and inspection in compatible bro
 
 ## Flash cards
 
-The home page is flash cards. `/study` opens the same library. Practice muscles, bones, and ligaments with spaced repetition (SM-2 with learning steps). Learners paste or upload their own list of Latin terms; each line is matched to a structure, with fuzzy matching for typos and collective terms such as _Costae_ expanding to every member. Decks, progress, and review history are stored in the browser (IndexedDB) and can be exported as a JSON backup.
+The home page and `/study` open a library of 16 prepared anatomy decks. Learners browse by category or region, preview the cards, and start studying immediately. The collection contains 348 subjects with Latin/English names and rendered anatomical views. Spaced repetition uses SM-2 with learning steps, and the same card shares its progress across decks.
+
+Reviews are saved as immutable events in IndexedDB before the next card appears. Selected decks and pending cloud uploads are saved transactionally; removing a deck does not reset its history. The earlier app's custom decks and scheduling states are migrated without deleting the original data. A progress backup can be downloaded or restored from account settings.
+
+For recovery after browser storage loss, configure Supabase email authentication and the tables in `supabase/schema.sql`, then set the root environment variables shown in `.env.example`. Without this connection, the app explicitly offers device-only storage and downloadable backups. See [the web pilot and iOS architecture](docs/web-first-architecture.md) for setup, limitations, and the App Store plan.
+
+Run `npm run learning:validate` for prepared-deck and event-replay checks. With the development server running and Playwright browsers installed, run `npm run learning:browser` for browser persistence, migration, backup, and responsive-layout checks. Set `BROWSER=webkit` to use Playwright WebKit; real iPhone Safari remains a separate device test.
 
 Card images are pre-rendered from the 3D atlas. To regenerate them:
 

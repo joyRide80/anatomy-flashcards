@@ -855,6 +855,21 @@ export async function exportBackup(): Promise<Backup> {
   };
 }
 
+/** Read both old stores during the move to durable review events. Keep the originals. */
+export async function legacyMigrationData() {
+  await ensureMigrated();
+  const [decks, progress, reviews] = await Promise.all([
+    idbListDecks(), idbListProgress(), idbListReviews(),
+  ]);
+  if (decks === null || progress === null || reviews === null)
+    throw new Error("Your previous learning history could not be read. Reload to retry the migration.");
+  return {
+    decks: mergeDecks(decks, readDecks()),
+    progress: mergeProgress(progress, readProgress()),
+    reviews,
+  };
+}
+
 function parseBackup(data: unknown): Backup {
   const backup = data as Partial<Backup>;
   if (

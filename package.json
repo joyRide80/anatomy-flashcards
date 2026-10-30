@@ -2,9 +2,8 @@
   "name": "anatomy-studio",
   "version": "0.1.0",
   "private": true,
-  "engines": {
-    "node": ">=22.13.0"
-  },
+  "license": "MIT",
+  "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 3016",
     "build": "vite build",
@@ -13,11 +12,14 @@
     "cards:latin": "node scripts/fetch-latin-terms.mjs",
     "cards:catalog": "node scripts/build-card-catalog.mjs",
     "cards:render": "node scripts/render-cards.mjs",
-    "cards:validate": "node scripts/validate-cards.mjs"
+    "cards:validate": "node scripts/validate-cards.mjs",
+    "learning:validate": "node scripts/validate-learning.mjs && node scripts/validate-learning-sync.mjs",
+    "learning:browser": "node scripts/validate-learning-browser.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",
     "@shadcn/react": "0.3.0",
+    "@supabase/supabase-js": "2.118.0",
     "@types/three": "^0.159.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
@@ -59,6 +61,7 @@
     "vite": "8.0.13",
     "wrangler": "4.92.0"
   },
-  "type": "module",
-  "license": "MIT"
+  "engines": {
+    "node": ">=22.13.0"
+  }
 }
