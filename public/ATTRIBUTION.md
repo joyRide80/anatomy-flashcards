@@ -9,7 +9,19 @@ BodyParts3D, © The Database Center for Life Science licensed under CC Attributi
 - English names and relationships: IS-A and PART-OF concept, element, and inclusion tables from the same archive.
 - Publication: Mitsuhashi et al. (2009), BodyParts3D: 3D structure database for anatomical concepts. https://doi.org/10.1093/nar/gkn613
 
-Adaptations: axes and units converted from millimeters/Z-up to meters/Y-up; translated to rest at the stage; geometry simplified using meshoptimizer with 0.2% relative error limit per structure; normals quantized to signed 16-bit; packed into binary chunks; curated display system groupings and colors. The source contains 2,234 individual OBJ meshes; all remain represented. The combined hierarchy contains 3,432 named FMA concepts, which may reference multiple meshes. Original source identity is preserved in the manifest.
+Adaptations: axes and units converted from millimeters/Z-up to meters/Y-up; translated to rest at the stage; geometry simplified using meshoptimizer with a 0.2% relative error limit per structure; normals quantized to signed 16-bit; packed into binary chunks; curated display system groupings and colors. The BodyParts3D source contains 2,234 individual OBJ meshes. The skeleton and muscles from that set are replaced by the Z-Anatomy meshes below. 1,536 BodyParts3D meshes remain, covering the organs, vessels, nerves, and the other systems. Original source identity is preserved for those remaining meshes.
+
+## Skeleton, muscles, and joints
+
+Bones, skeletal muscles, and the joint meshes (capsules, ligaments, discs, menisci, and labra) are taken from Z-Anatomy (Gauthier Kervyn and Marcin Zielinski), file `zanatomy.blend`, exported by `scripts/export-zanatomy-systems.py` and installed by `scripts/replace-body-systems.mjs`.
+
+- Model: https://github.com/Z-Anatomy/Models-of-human-anatomy
+- Project: https://www.z-anatomy.com/
+- The blend's own licence text attributes the base to "BodyParts3D, © The Database Center for Life Science licensed under CC Attribution-Share Alike 2.1 Japan", mixed and modified by Z-Anatomy, and requires derivative works to stay under that licence.
+
+These three layers are exported together from that file, with the same axis change (Z-up meters to Y-up meters) and the same 8.4 mm / 10.5 mm translation, and they are not warped afterward. They meet because they were modeled on one skeleton. Origin and insertion markers are omitted. The organs, vessels, and nerves are still the BodyParts3D meshes and can sit about 1–2 cm off this skeleton, because Z-Anatomy repaired the bones.
+
+Sharing the combined atlas must attribute both sources and keep the Z-Anatomy skeleton, muscles, and joints under the share-alike terms above. The application code remains MIT.
 
 Source OBJ comments mention an older CC BY-SA 2.1 Japan license. The official current database license linked above supersedes that legacy text and explicitly permits redistribution and adaptation under CC BY 4.0.
 
@@ -17,7 +29,7 @@ BodyParts3D represents an adult male reference anatomy based on TARO MRI and ana
 
 ## Historical assets (not included in the current release)
 
-Earlier repository revisions included female reference anatomy: Kristen Browne and Heidi Schlehlein, Human Reference Atlas / HuBMAP, *3D Reference Organ Set for Female v1.5* (2023). CC BY 4.0. Geometry adapted for this viewer.
+Earlier repository revisions included female reference anatomy: Kristen Browne and Heidi Schlehlein, Human Reference Atlas / HuBMAP, _3D Reference Organ Set for Female v1.5_ (2023). CC BY 4.0. Geometry adapted for this viewer.
 
 - Source DOI: https://doi.org/10.48539/HBM352.BTSQ.586
 - Dataset: https://lod.humanatlas.io/ref-organ/united-female/v1.5

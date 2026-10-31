@@ -45,7 +45,8 @@ const DEFINITIONS: Definition[] = [
     name: "Bones of the hand",
     category: "bone",
     region: "Upper limb",
-    description: "Practise the carpals, metacarpals and phalanges from several viewing angles.",
+    description:
+      "Practise the carpals, metacarpals and phalanges from several viewing angles.",
     ids: [
       "scaphoid",
       "lunate",
@@ -56,14 +57,16 @@ const DEFINITIONS: Definition[] = [
       "capitate",
       "hamate",
     ],
-    match: /metacarpal|phalanx-of-(thumb|index-finger|middle-finger|ring-finger|little-finger)/,
+    match:
+      /metacarpal|phalanx-of-(thumb|index-finger|middle-finger|ring-finger|little-finger)/,
   },
   {
     id: "bones-foot",
     name: "Bones of the foot",
     category: "bone",
     region: "Lower limb",
-    description: "Identify the tarsals, metatarsals and toe phalanges included in this atlas.",
+    description:
+      "Identify the tarsals, metatarsals and toe phalanges included in this atlas.",
     ids: [
       "talus",
       "calcaneus",
@@ -80,7 +83,8 @@ const DEFINITIONS: Definition[] = [
     name: "Skull & hyoid",
     category: "bone",
     region: "Head & neck",
-    description: "Learn the cranial and facial bones represented in the atlas, plus the hyoid.",
+    description:
+      "Learn the cranial and facial bones represented in the atlas, including the auditory ossicles and the hyoid.",
     ids: [
       "frontal-bone",
       "parietal-bone",
@@ -92,8 +96,13 @@ const DEFINITIONS: Definition[] = [
       "mandible",
       "zygomatic-bone",
       "nasal-bone",
+      "lacrimal",
+      "inferior-nasal-concha",
       "palatine-bone",
       "vomer",
+      "malleus",
+      "incus",
+      "stapes",
       "hyoid-bone",
     ],
   },
@@ -102,8 +111,9 @@ const DEFINITIONS: Definition[] = [
     name: "Vertebral column",
     category: "bone",
     region: "Trunk",
-    description: "Identify the cervical, thoracic and lumbar vertebrae, including atlas and axis.",
-    ids: ["atlas", "axis"],
+    description:
+      "Identify the cervical, thoracic and lumbar vertebrae, including atlas, axis, and the coccyx.",
+    ids: ["atlas", "axis", "coccyx"],
     match: /vertebra$/,
   },
   {
@@ -111,7 +121,8 @@ const DEFINITIONS: Definition[] = [
     name: "Ribs & sternum",
     category: "bone",
     region: "Trunk",
-    description: "Study the twelve numbered ribs and the sternum, including its component parts.",
+    description:
+      "Study the twelve numbered ribs and the sternum, including its component parts.",
     ids: ["sternum", "manubrium", "body-of-sternum", "xiphoid-process"],
     match: /-rib$/,
   },
@@ -146,18 +157,15 @@ const DEFINITIONS: Definition[] = [
       "Recognise the forearm muscles in the catalogue through image recall and multiple choice.",
     ids: [
       "brachioradialis",
-      "pronator-teres",
       "pronator-quadratus",
       "supinator",
       "flexor-carpi-radialis",
       "flexor-carpi-ulnaris",
       "palmaris-longus",
-      "flexor-digitorum-superficialis",
       "flexor-digitorum-profundus",
       "flexor-pollicis-longus",
       "extensor-carpi-radialis-longus",
       "extensor-carpi-radialis-brevis",
-      "extensor-carpi-ulnaris",
       "extensor-digitorum",
       "extensor-digiti-minimi",
       "extensor-indicis",
@@ -228,7 +236,8 @@ const DEFINITIONS: Definition[] = [
     name: "Neck muscles",
     category: "muscle",
     region: "Head & neck",
-    description: "Practise a selection of superficial, deep and hyoid-related neck muscles.",
+    description:
+      "Practise a selection of superficial, deep and hyoid-related neck muscles.",
     ids: [
       "sternocleidomastoid",
       "platysma",
@@ -236,10 +245,7 @@ const DEFINITIONS: Definition[] = [
       "scalenus-medius",
       "scalenus-posterior",
       "longus-capitis",
-      "longus-colli",
       "splenius-capitis",
-      "splenius-cervicis",
-      "digastric",
       "mylohyoid",
       "geniohyoid",
       "stylohyoid",
@@ -266,10 +272,46 @@ const DEFINITIONS: Definition[] = [
       "rhomboid-minor",
       "levator-scapulae",
       "diaphragm",
-      "external-intercostal-muscle",
-      "internal-intercostal-muscle",
-      "innermost-intercostal-muscle",
       "transversus-thoracis",
+    ],
+  },
+  {
+    id: "muscles-face",
+    name: "Face & mastication",
+    category: "muscle",
+    region: "Head & neck",
+    description:
+      "Facial expression muscles and the muscles of mastication, including the parts of masseter, orbicularis oculi, and lateral pterygoid.",
+    ids: [
+      "frontalis",
+      "occipitalis",
+      "temporoparietalis",
+      "orbicularis-oculi",
+      "orbital-part-of-orbicularis-oculi",
+      "palpebral-part-of-orbicularis-oculi",
+      "corrugator-supercilii",
+      "procerus",
+      "nasalis",
+      "levator-nasolabialis",
+      "depressor-septi-nasi",
+      "orbicularis-oris",
+      "levator-labii-superioris",
+      "levator-anguli-oris",
+      "zygomaticus-major",
+      "zygomaticus-minor",
+      "risorius",
+      "bucinator",
+      "depressor-anguli-oris",
+      "depressor-labii-inferioris",
+      "mentalis",
+      "temporalis",
+      "masseter",
+      "superficial-part-of-masseter",
+      "deep-part-of-masseter",
+      "medial-pterygoid",
+      "lateral-pterygoid",
+      "superior-head-of-lateral-pterygoid",
+      "inferior-head-of-lateral-pterygoid",
     ],
   },
   {
@@ -294,7 +336,15 @@ const DEFINITIONS: Definition[] = [
     category: "ligament",
     region: "Whole body",
     description:
-      "A small reference set of the 13 ligaments and membranes available in this model. This is not a complete joint anatomy course.",
+      "Ligaments and membranes from the joint layer, including the limbs, spine, and skull.",
+  },
+  {
+    id: "joints",
+    name: "Joint structures",
+    category: "joint",
+    region: "Whole body",
+    description:
+      "Capsules, discs, menisci, and labra. Ligaments and membranes have their own deck.",
   },
 ];
 
@@ -311,7 +361,9 @@ export function curatedDecks(catalog: Catalog): CuratedDeck[] {
     );
     for (const id of explicit) {
       if (!structures.some((s) => s.id === id))
-        throw new Error(`Deck ${definition.id} references a missing card: ${id}`);
+        throw new Error(
+          `Deck ${definition.id} references a missing card: ${id}`,
+        );
     }
     return {
       id: definition.id,

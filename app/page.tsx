@@ -258,6 +258,23 @@ export default function Home() {
   const choosePart = (id: string) => {
     const p = parts.get(id);
     if (!p) return;
+    // Name the tapped part and move the orange highlight onto it.
+    // The framed view stays put; the previous subject remains visible beside it.
+    if (studyExplore) {
+      setChosen((current) =>
+        current
+          ? { ...current, name: p.name }
+          : { id: p.conceptId, name: p.name, elements: [id] },
+      );
+      setState((s) => {
+        if (s.selected.length === 1 && s.selected[0] === id) return s;
+        const context = new Set(s.context ?? []);
+        for (const partId of s.selected) context.add(partId);
+        context.delete(id);
+        return { ...s, selected: [id], context: [...context] };
+      });
+      return;
+    }
     setChosen({ id: p.conceptId, name: p.name, elements: [id] });
     setState((s) => ({
       ...s,
@@ -356,8 +373,8 @@ export default function Home() {
           </Badge>
         </h1>
         <div className="identity-meta">
-          {atlas ? atlas.parts.length.toLocaleString() : "2,234"} modeled pieces{" "}
-          <span>·</span> BodyParts3D
+          {atlas ? atlas.parts.length.toLocaleString() : "2,815"} modeled pieces{" "}
+          <span>·</span> Z-Anatomy · BodyParts3D
         </div>
       </header>
       <nav className="top-actions" aria-label="Explorer panels">
@@ -800,7 +817,7 @@ export default function Home() {
             <strong>Preparing the anatomy</strong>
             <span>
               {progress}% · Loading{" "}
-              {atlas?.parts.length.toLocaleString() ?? "2,234"} pieces
+              {atlas?.parts.length.toLocaleString() ?? "2,815"} pieces
             </span>
             <div className="loading-track">
               <i style={{ width: `${progress}%` }} />
@@ -881,11 +898,24 @@ export default function Home() {
             )}
             <a
               className="source-link"
-              href="https://lifesciencedb.jp/bp3d/"
+              href={
+                selected &&
+                (selected.system === "joints" ||
+                  selected.system === "skeletal" ||
+                  selected.system === "muscular")
+                  ? "https://github.com/Z-Anatomy/Models-of-human-anatomy"
+                  : "https://lifesciencedb.jp/bp3d/"
+              }
               target="_blank"
               rel="noreferrer"
             >
-              View anatomical source <ArrowUpRight size={14} />
+              {selected &&
+              (selected.system === "joints" ||
+                selected.system === "skeletal" ||
+                selected.system === "muscular")
+                ? "View Z-Anatomy source"
+                : "View anatomical source"}{" "}
+              <ArrowUpRight size={14} />
             </a>
           </div>
           <div className="detail-actions">
@@ -927,14 +957,18 @@ export default function Home() {
           <div className="eyebrow">SOURCE & SCOPE</div>
           <SheetTitle className="structure-title">A body, revealed.</SheetTitle>
           <SheetDescription>
-            Explore the adult male reference anatomy from BodyParts3D.
+            Explore an adult male reference. The skeleton, muscles, and joints
+            are one Z-Anatomy model. The organs and vessels remain BodyParts3D.
           </SheetDescription>
           <div className="about-copy">
             <p>
-              <strong>Male · BodyParts3D</strong>
+              <strong>Male · Z-Anatomy skeleton, muscles, and joints</strong>
               <br />
-              2,234 individual meshes and 3,432 named concepts from an adult
-              male reference anatomy.
+              {(atlas?.parts.length ?? 2815).toLocaleString()} individual meshes
+              and {(atlas?.concepts.length ?? 3529).toLocaleString()} named
+              concepts. Bones, muscles, and joints come from the same Z-Anatomy
+              file, so those layers meet. Arteries, veins, nerves, and organs
+              remain BodyParts3D 4.0.
             </p>
             <p>
               This reference does not contain every human structure or
@@ -950,14 +984,25 @@ export default function Home() {
             <h3>Source</h3>
             <p>
               BodyParts3D, © The Database Center for Life Science licensed under
-              CC Attribution 4.0 International.
+              CC Attribution 4.0 International, supplies the organs, vessels,
+              and nerves. The skeleton, muscles, and joints are from Z-Anatomy,
+              which adapts BodyParts3D and distributes that work under CC BY-SA
+              2.1 Japan. Both attributions apply when you share the combined
+              atlas.
             </p>
             <a
               href="https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html"
               target="_blank"
               rel="noreferrer"
             >
-              Dataset license <ArrowUpRight size={14} />
+              BodyParts3D license <ArrowUpRight size={14} />
+            </a>
+            <a
+              href="https://github.com/Z-Anatomy/Models-of-human-anatomy"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Z-Anatomy model <ArrowUpRight size={14} />
             </a>
             <a
               href="https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html"

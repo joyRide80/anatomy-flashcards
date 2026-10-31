@@ -1,4 +1,4 @@
-export type Category = "bone" | "muscle" | "ligament";
+export type Category = "bone" | "muscle" | "ligament" | "joint";
 
 /** A card subject: one structure (left/right meshes merged) or a composite such as a whole muscle. */
 export interface Structure {
@@ -9,7 +9,7 @@ export interface Structure {
   category: Category;
   /** Every atlas mesh belonging to the structure, both sides. */
   parts: string[];
-  /** Meshes highlighted on the card (one side for paired structures). */
+  /** Side the 3D explorer frames on. Cards highlight every part, both sides. */
   focus: string[];
   /** Structure ids of the pieces that make up a composite. */
   members?: string[];

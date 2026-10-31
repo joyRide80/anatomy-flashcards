@@ -1,5 +1,6 @@
-// Builds public/cards/catalog.json: bone, muscle, and ligament structures with Latin terms.
-// Run scripts/fetch-latin-terms.mjs first to refresh scripts/data/latin-terms.json.
+// Builds public/cards/catalog.json: bone, muscle, ligament, and joint structures with Latin terms.
+// Existing catalogue IDs are kept when the meshes or the anatomical name still match, so decks
+// and review history stay attached. Run scripts/fetch-latin-terms.mjs first to refresh Latin terms.
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 
 const atlas = JSON.parse(
@@ -18,13 +19,19 @@ const previousImages = new Map(
 );
 
 const EXCLUDE =
-  /tooth|gingiva|papillary|intervertebral disk|cartilage|trochlea|tendon|raphe|linea alba|conus elasticus|lens|iliotibial tract/i;
+  /tooth|gingiva|papillary|intervertebral disk|cartilage|trochlea|tendon|tendinous|raphe|linea alba|conus elasticus|lens|iliotibial tract|bursa|retinaculum|sheath|aponeurosis|\btarsus\b|nucleus pulposus|sinus of|cells of ethmoid|\b(canine|incisor|premolar|molar)\b|fat pad|frenul/i;
 const MUSCLE_OUTSIDE_MUSCULAR =
   /^(fibularis|tibialis|subscapularis|levator scapulae|tensor fasciae latae)/i;
 const LIGAMENT = /ligament|interosseous membrane|thyrohyoid membrane/i;
+const JOINT_STRUCTURE = /capsule|meniscus|\bdisc\b|labrum|symphysis/i;
 
 function category(part, base) {
-  if (EXCLUDE.test(part.name)) return null;
+  if (EXCLUDE.test(part.name) || EXCLUDE.test(base)) return null;
+  if (part.system === "joints") {
+    if (JOINT_STRUCTURE.test(part.name)) return "joint";
+    if (/ligament|membrane|oblique cord/i.test(part.name)) return "ligament";
+    return null;
+  }
   if (LIGAMENT.test(part.name)) return "ligament";
   if (part.system === "muscular" || MUSCLE_OUTSIDE_MUSCULAR.test(base))
     return "muscle";
@@ -38,6 +45,7 @@ function side(name) {
 const baseName = (name) =>
   name
     .replace(/\b(left|right) /i, "")
+    .replace(/[()]/g, "")
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
@@ -84,6 +92,28 @@ for (const part of atlas.parts) {
   meshToBase.set(part.id, id);
 }
 
+const partById = new Map(atlas.parts.map((p) => [p.id, p]));
+// When the new skeleton, muscle, or joint mesh exists, drop the older connective-tissue duplicate.
+function preferSystem(entry) {
+  const systems = new Set(entry.parts.map((id) => partById.get(id)?.system));
+  let keep = null;
+  if (entry.category === "muscle" && systems.has("muscular")) keep = "muscular";
+  else if (
+    (entry.category === "ligament" || entry.category === "joint") &&
+    systems.has("joints")
+  )
+    keep = "joints";
+  else if (entry.category === "bone" && systems.has("skeletal"))
+    keep = "skeletal";
+  if (!keep) return;
+  const ok = (id) => partById.get(id)?.system === keep;
+  for (const id of entry.parts) if (!ok(id)) meshToBase.delete(id);
+  entry.parts = entry.parts.filter(ok);
+  entry.right = entry.right.filter(ok);
+  entry.other = entry.other.filter(ok);
+}
+for (const entry of bases.values()) preferSystem(entry);
+
 // Concepts whose meshes all belong to one base name the same structure (e.g. side-specific concepts).
 const conceptMembers = new Map();
 for (const c of atlas.concepts) {
@@ -106,7 +136,7 @@ for (const c of atlas.concepts) {
 
 // Composites: whole muscles split into heads or parts, and whole bones modeled in pieces.
 const composites = new Map();
-const PIECE = /^.+? (?:head|part|belly) of (.+)$/;
+const PIECE = /^[\w-]+ (?:head|part|belly) of (.+)$/;
 const byWhole = new Map();
 for (const s of bases.values()) {
   const m = PIECE.exec(s.en);
@@ -116,12 +146,21 @@ for (const s of bases.values()) {
       concepts: [],
     });
 }
-const WHOLE_CONCEPTS = { sternum: "FMA7485" };
-for (const [whole, fma] of Object.entries(WHOLE_CONCEPTS))
-  byWhole.set(whole, {
-    members: conceptMembers.get(fma).members,
-    concepts: [fma],
-  });
+const conceptByName = new Map(
+  [...conceptMembers.entries()].map(([id, info]) => [
+    info.name.toLowerCase(),
+    id,
+  ]),
+);
+const WHOLE_CONCEPTS = { sternum: "Sternum" };
+for (const [whole, key] of Object.entries(WHOLE_CONCEPTS)) {
+  const fma = conceptMembers.has(key)
+    ? key
+    : conceptByName.get(key.toLowerCase());
+  const info = fma ? conceptMembers.get(fma) : null;
+  if (!info) continue;
+  byWhole.set(whole, { members: info.members, concepts: [fma] });
+}
 for (const [whole, { members, concepts }] of byWhole) {
   const id = slug(whole);
   if (members.length > 1 && !bases.has(id))
@@ -188,6 +227,281 @@ const FIXED = {
   ],
   "sesamoid bone of foot": ["ossa sesamoidea pedis"],
 };
+
+// Mesh names from Z-Anatomy, after side words and parentheses are removed.
+// FMA_ALIAS reads Latin already stored under that id. LATIN_ALIAS is used when
+// TA98 has no row for this structure, or when the shared TA word must be qualified
+// so it is not the name shown on the card.
+const SPELLING = { bucinator: "buccinator" };
+const part = (term, parent) => [`${term} (${parent})`, term];
+const FMA_ALIAS = {
+  bucinator: "FMA46834",
+  buccinator: "FMA46834",
+  "ary-epiglottic part of oblique arytenoid": "FMA46602",
+  "internal abdominal oblique": "FMA13891",
+  "innermost intercostal muscles": "FMA74086",
+  "internal intercostal muscles": "FMA74085",
+  "interspinales colli": "FMA71309",
+  "interspinales lumborum": "FMA71306",
+  "interspinales thoracis": "FMA71308",
+  "levator nasolabialis": "FMA46802",
+  "levatores breves costarum": "FMA71314",
+  "levatores longi costarum": "FMA71313",
+  "longissimus colli": "FMA22711",
+  "lumbrical muscles of foot": "FMA37453",
+  "lumbrical muscles of hand": "FMA37385",
+  "multifidus colli": "FMA22833",
+  "dorsal interossei muscles of hand": "FMA37418",
+  "dorsal interossei muscles of foot": "FMA37457",
+  "rectus anterior capitis": "FMA46312",
+  "rectus lateralis capitis": "FMA46316",
+  "rectus posterior major capitis": "FMA32525",
+  "rectus posterior minor capitis": "FMA32526",
+  "semispinalis colli": "FMA22829",
+  "splenius colli": "FMA22681",
+  "annular ligament of radius": "FMA38872",
+  "dorsal intercuneiform ligaments": "FMA44214",
+  "intercornual ligament": "FMA21503",
+  "sacrococcygeal symphysis": "FMA16210",
+  "tibionavicular ligament": "FMA44061",
+  "tibiocalcaneal ligament": "FMA44062",
+  "collateral metacarpophalangeal ligaments": "FMA71407",
+  "collateral interphalangeal ligaments of hand": "FMA71409",
+  "palmar interphalangeal ligaments": "FMA71410",
+  "collateral metatarsophalangeal ligaments": "FMA71424",
+  "plantar metatarsophalangeal ligaments": "FMA71425",
+  "collateral interphalangeal ligaments of foot": "FMA71426",
+  "plantar interphalangeal ligaments": "FMA71427",
+};
+const LATIN_ALIAS = {
+  "anterior belly of digastric": part("venter anterior", "m. digastricus"),
+  "posterior belly of digastric": part("venter posterior", "m. digastricus"),
+  "deep head of flexor pollicis brevis": part(
+    "caput profundum",
+    "m. flexor pollicis brevis",
+  ),
+  "deep head of pronator teres": part("caput ulnare", "m. pronator teres"),
+  "superficial head of pronator teres": part(
+    "caput humerale",
+    "m. pronator teres",
+  ),
+  "deep part of masseter": part("pars profunda", "m. masseter"),
+  "superficial part of masseter": part("pars superficialis", "m. masseter"),
+  "external part of thyro-arytenoid": part(
+    "pars externa",
+    "m. thyroarytenoideus",
+  ),
+  "humeral head of extensor carpi ulnaris": part(
+    "caput humerale",
+    "m. extensor carpi ulnaris",
+  ),
+  "ulnar head of extensor carpi ulnaris": part(
+    "caput ulnare",
+    "m. extensor carpi ulnaris",
+  ),
+  "humero-ulnar head of flexor digitorum superficialis": part(
+    "caput humeroulnare",
+    "m. flexor digitorum superficialis",
+  ),
+  "radial head of flexor digitorum superficialis": part(
+    "caput radiale",
+    "m. flexor digitorum superficialis",
+  ),
+  "inferior head of lateral pterygoid": part(
+    "caput inferius",
+    "m. pterygoideus lateralis",
+  ),
+  "superior head of lateral pterygoid": part(
+    "caput superius",
+    "m. pterygoideus lateralis",
+  ),
+  "orbital part of orbicularis oculi": part(
+    "pars orbitalis",
+    "m. orbicularis oculi",
+  ),
+  "palpebral part of orbicularis oculi": part(
+    "pars palpebralis",
+    "m. orbicularis oculi",
+  ),
+  "spinalis colli": ["m. spinalis cervicis", "m. spinalis colli"],
+  "dorsal interossei muscles of hand": ["mm. interossei dorsales manus"],
+  "dorsal interossei muscles of foot": ["mm. interossei dorsales pedis"],
+  "lumbrical muscles of hand": ["mm. lumbricales manus"],
+  "lumbrical muscles of foot": ["mm. lumbricales pedis"],
+  "dorsal parts of lateral intertransversarii lumborum muscles": part(
+    "partes dorsales",
+    "mm. intertransversarii laterales lumborum",
+  ),
+  "ventral parts of lateral intertransversarii lumborum muscles": part(
+    "partes ventrales",
+    "mm. intertransversarii laterales lumborum",
+  ),
+  "anterior meniscotibial ligament lateral meniscus": [
+    "lig. meniscotibiale anterius (meniscus lateralis)",
+  ],
+  "anterior meniscotibial ligament medial meniscus": [
+    "lig. meniscotibiale anterius (meniscus medialis)",
+  ],
+  "posterior meniscotibial ligament lateral meniscus": [
+    "lig. meniscotibiale posterius (meniscus lateralis)",
+  ],
+  "posterior meniscotibial ligament medial meniscus": [
+    "lig. meniscotibiale posterius (meniscus medialis)",
+  ],
+  "anterior talocalcaneal ligament": ["lig. talocalcaneum anterius"],
+  "capitohamate interosseous ligament": ["lig. capitohamatum interosseum"],
+  "check ligament of medial rectus": ["lacertus musculi recti medialis"],
+  "deep part of tibial collateral ligament": part(
+    "pars profunda",
+    "lig. collaterale tibiale",
+  ),
+  "superficial part of tibial collateral ligament": part(
+    "pars superficialis",
+    "lig. collaterale tibiale",
+  ),
+  "descending part of iliofemoral ligament": part(
+    "pars descendens",
+    "lig. iliofemorale",
+  ),
+  "transverse part of iliofemoral ligament": part(
+    "pars transversa",
+    "lig. iliofemorale",
+  ),
+  "dorsal radio-ulnar ligament": ["lig. radioulnare dorsale"],
+  "palmar radio-ulnar ligament": ["lig. radioulnare palmare"],
+  "dorsal scaphotriquetral ligament": ["lig. scaphotriquetrum dorsale"],
+  "palmar scaphotriquetral ligament": ["lig. scaphotriquetrum palmare"],
+  "inferior glenohumeral ligament": ["lig. glenohumerale inferius"],
+  "middle glenohumeral ligament": ["lig. glenohumerale medium"],
+  "superior glenohumeral ligament": ["lig. glenohumerale superius"],
+  "intersesamoid ligament": ["lig. intersesamoideum"],
+  "lateral temporomandibular ligament": [
+    "lig. laterale (articulatio temporomandibularis)",
+  ],
+  "lunotriquetral interosseous ligament": ["lig. lunotriquetrum interosseum"],
+  "palmar lunotriquetral ligament": ["lig. lunotriquetrum palmare"],
+  "meniscopatellar ligament": ["lig. meniscopatellare"],
+  "palmar capitohamate ligament": ["lig. capitohamatum palmare"],
+  "palmar trapezoideocapitate ligament": ["lig. trapezoideocapitatum palmare"],
+  "pisotriquetral ligament": ["lig. pisotriquetrum"],
+  "popliteofibular ligament": ["lig. popliteofibulare"],
+  "posterior tibiotalar ligament": ["pars tibiotalaris posterior"],
+  "radiocapitate ligament": ["lig. radiocapitatum"],
+  "radioscaphocapitate ligament": ["lig. radioscaphocapitatum"],
+  "scaphocapitate ligament": ["lig. scaphocapitatum"],
+  "scapholunate interosseous ligament": ["lig. scapholunatum interosseum"],
+  "scaphotrapeziotrapezoidal ligament": ["lig. scaphotrapeziotrapezoideum"],
+  "transverse tibiofibular ligament": ["lig. tibiofibulare transversum"],
+  "trapeziotrapezoidal interosseous ligament": [
+    "lig. trapeziotrapezoideum interosseum",
+  ],
+  "trapezoideocapitate interosseous ligament": [
+    "lig. trapezoideocapitatum interosseum",
+  ],
+  "triquetrocapitate ligament": ["lig. triquetrocapitatum"],
+  "triquetrohamate ligament": ["lig. triquetrohamatum"],
+  "ulnocapitate ligament": ["lig. ulnocapitatum"],
+  "ulnolunate ligament": ["lig. ulnolunatum"],
+  "ulnopisiform ligament": ["lig. ulnopisiforme"],
+  "ulnotriquetral ligament": ["lig. ulnotriquetrum"],
+  "collateral metacarpophalangeal ligaments": [
+    "ligg. collateralia (articulationes metacarpophalangeae)",
+  ],
+  "collateral interphalangeal ligaments of hand": [
+    "ligg. collateralia (articulationes interphalangeae manus)",
+  ],
+  "collateral metatarsophalangeal ligaments": [
+    "ligg. collateralia (articulationes metatarsophalangeae)",
+  ],
+  "collateral interphalangeal ligaments of foot": [
+    "ligg. collateralia (articulationes interphalangeae pedis)",
+  ],
+  "palmar interphalangeal ligaments": [
+    "ligg. palmaria (articulationes interphalangeae manus)",
+  ],
+  "plantar metatarsophalangeal ligaments": [
+    "ligg. plantaria (articulationes metatarsophalangeae)",
+  ],
+  "plantar interphalangeal ligaments": [
+    "ligg. plantaria (articulationes interphalangeae pedis)",
+  ],
+};
+// Singular capsule, or the plural, then the joint it belongs to.
+const CAPSULE = {
+  "articular capsule of acromioclavicular joint": [
+    "capsula articularis",
+    "articulatio acromioclavicularis",
+  ],
+  "articular capsule of elbow joint": [
+    "capsula articularis",
+    "articulatio cubiti",
+  ],
+  "articular capsule of glenohumeral joint": [
+    "capsula articularis",
+    "articulatio humeri",
+  ],
+  "articular capsule of hip joint": [
+    "capsula articularis",
+    "articulatio coxae",
+  ],
+  "articular capsule of interphalangeal joint of great toe": [
+    "capsula articularis",
+    "articulatio interphalangea hallucis",
+  ],
+  "articular capsule of knee joint": [
+    "capsula articularis",
+    "articulatio genus",
+  ],
+  "articular capsule of radiocarpal joint": [
+    "capsula articularis",
+    "articulatio radiocarpalis",
+  ],
+  "articular capsule of sternoclavicular joint": [
+    "capsula articularis",
+    "articulatio sternoclavicularis",
+  ],
+  "articular capsule of superior tibiofibular joint": [
+    "capsula articularis",
+    "articulatio tibiofibularis",
+  ],
+  "articular capsule of temporomandibular joint": [
+    "capsula articularis",
+    "articulatio temporomandibularis",
+  ],
+  "articular capsules of distal interphalangeal joints": [
+    "capsulae articulares",
+    "articulationes interphalangeae distales manus",
+  ],
+  "articular capsules of distal interphalangeal joints of foot": [
+    "capsulae articulares",
+    "articulationes interphalangeae distales pedis",
+  ],
+  "articular capsules of metacarpophalangeal joints": [
+    "capsulae articulares",
+    "articulationes metacarpophalangeae",
+  ],
+  "articular capsules of metatarsophalangeal joints": [
+    "capsulae articulares",
+    "articulationes metatarsophalangeae",
+  ],
+  "articular capsules of proximal interphalangeal joints": [
+    "capsulae articulares",
+    "articulationes interphalangeae proximales manus",
+  ],
+  "articular capsules of proximal interphalangeal joints of foot": [
+    "capsulae articulares",
+    "articulationes interphalangeae proximales pedis",
+  ],
+};
+const DISC = {
+  "articular disc of acromioclavicular joint":
+    "articulatio acromioclavicularis",
+  "articular disc of distal radio-ulnar joint":
+    "articulatio radioulnaris distalis",
+  "articular disc of sternoclavicular joint": "articulatio sternoclavicularis",
+  "articular disc of temporomandibular joint":
+    "articulatio temporomandibularis",
+};
 function ruleLatin(en) {
   if (FIXED[en]) return FIXED[en];
   let m;
@@ -217,6 +531,16 @@ function ruleLatin(en) {
     return [`m. lumbricalis ${roman(m[1])} pedis`];
   if ((m = /^(\w+) plantar interosseous of foot$/.exec(en)) && roman(m[1]))
     return [`m. interosseus plantaris ${roman(m[1])}`];
+  if ((m = /^intervertebral disc ([ctls])(\d+)-([ctls])(\d+)$/.exec(en))) {
+    const level = (letter, n) => `${letter.toUpperCase()}${n}`;
+    return [
+      `discus intervertebralis ${level(m[1], m[2])}/${level(m[3], m[4])}`,
+    ];
+  }
+  const capsule = CAPSULE[en];
+  if (capsule) return [`${capsule[0]} (${capsule[1]})`, capsule[0]];
+  if (DISC[en])
+    return [`discus articularis (${DISC[en]})`, "discus articularis"];
   return [];
 }
 
@@ -234,9 +558,15 @@ function latinFor(s) {
     s.en.replace(/ bone$/, ""),
     `${s.en} bone`,
   ];
+  if (s.en.endsWith(" muscles")) {
+    const singular = s.en.replace(/ muscles$/, "");
+    names.push(singular, `${singular} muscle`);
+  }
+  for (const n of [...names]) if (SPELLING[n]) names.push(SPELLING[n]);
   for (const n of names) {
-    const fma = termsByEnglish.get(n);
-    for (const t of termsByFma[fma]?.la ?? []) push(t);
+    for (const t of LATIN_ALIAS[n] ?? []) push(t);
+    for (const t of termsByFma[FMA_ALIAS[n]]?.la ?? []) push(t);
+    for (const t of termsByFma[termsByEnglish.get(n)]?.la ?? []) push(t);
   }
   for (const t of ruleLatin(s.en)) push(t);
   return out;
@@ -278,7 +608,7 @@ for (const s of structures) {
   if (unique.length)
     s.la = [...unique, ...s.la.filter((t) => !unique.includes(t))];
   const whole = wholeOf.get(s.id)?.la[0];
-  if (!s.la.length || !whole) continue;
+  if (!s.la.length || !whole || s.la[0].includes("(")) continue;
   const stem = whole
     .toLowerCase()
     .split(/\s+/)
@@ -303,6 +633,116 @@ for (const [fma, info] of conceptMembers) {
   groups.push({ id, en: info.name, la: terms, members: info.members.sort() });
 }
 
+// Keep the learner-facing id when this is the same structure as a card that already exists.
+function normName(en) {
+  return en
+    .toLowerCase()
+    .replace(/\b(left|right)\b/g, "")
+    .replace(/\b(muscle|muscles|bone|bones)\b/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+function sharedCount(a, b) {
+  const set = new Set(a);
+  let n = 0;
+  for (const id of b) if (set.has(id)) n++;
+  return n;
+}
+const prevList = previous?.structures ?? [];
+const pairs = [];
+for (const s of structures)
+  for (const prev of prevList) {
+    const shared = sharedCount(s.parts, prev.parts);
+    const sameName = normName(s.en) === normName(prev.en);
+    if (!shared && !sameName) continue;
+    const union = new Set([...s.parts, ...prev.parts]).size;
+    pairs.push({ s, prev, shared, score: shared ? shared / union : 0.5 });
+  }
+pairs.sort((a, b) => b.score - a.score || b.shared - a.shared);
+const idMap = new Map();
+const usedPrev = new Set();
+const usedNew = new Set();
+let preserved = 0;
+let retargeted = 0;
+for (const { s, prev, shared } of pairs) {
+  if (usedNew.has(s) || usedPrev.has(prev.id)) continue;
+  usedNew.add(s);
+  usedPrev.add(prev.id);
+  const provisional = s.id;
+  const sameParts = shared === s.parts.length && shared === prev.parts.length;
+  idMap.set(provisional, prev.id);
+  s.id = prev.id;
+  s.en = prev.en;
+  if (prev.la?.length) s.la = prev.la;
+  if (!shared) retargeted++;
+  else if (sameParts) {
+    s.parts = prev.parts;
+    s.focus = prev.focus;
+    if (prev.members) s.members = prev.members;
+    preserved++;
+  } else {
+    const parts = [
+      ...new Set([...prev.parts.filter((id) => partById.has(id)), ...s.parts]),
+    ];
+    s.parts = parts;
+    if (!s.focus.every((id) => parts.includes(id)))
+      s.focus = prev.focus.filter((id) => parts.includes(id));
+    if (prev.members) s._keepMembers = prev.members;
+    preserved++;
+  }
+}
+const taken = new Set(
+  structures.filter((s) => usedNew.has(s)).map((s) => s.id),
+);
+let added = 0;
+for (const s of structures) {
+  if (usedNew.has(s)) continue;
+  const cleaned = s.en.replace(/ (muscle|bone)$/i, "");
+  let id = slug(cleaned);
+  if (taken.has(id)) id = slug(s.en);
+  let n = 2;
+  while (taken.has(id)) id = `${slug(cleaned)}-${n++}`;
+  if (id !== s.id) idMap.set(s.id, id);
+  s.id = id;
+  s.en = cleaned === "bucinator" ? "buccinator" : cleaned;
+  taken.add(id);
+  added++;
+}
+const covered = new Set(structures.flatMap((s) => s.parts));
+let kept = 0;
+for (const prev of prevList) {
+  if (usedPrev.has(prev.id)) continue;
+  if (prev.parts.every((id) => covered.has(id))) continue;
+  structures.push(prev);
+  kept++;
+}
+for (const s of structures) if (s.en === "bucinator") s.en = "buccinator";
+const mapId = (id) => idMap.get(id) ?? id;
+const finalIds = new Set(structures.map((s) => s.id));
+for (const s of structures)
+  if (s.members || s._keepMembers)
+    s.members = [
+      ...new Set([...(s._keepMembers ?? []), ...(s.members ?? []).map(mapId)]),
+    ].filter((id) => finalIds.has(id));
+for (const s of structures) delete s._keepMembers;
+for (let i = groups.length - 1; i >= 0; i--) {
+  const members = [...new Set(groups[i].members.map(mapId))].filter((id) =>
+    finalIds.has(id),
+  );
+  if (members.length < 2 || finalIds.has(groups[i].id)) groups.splice(i, 1);
+  else groups[i].members = members;
+}
+for (const prevGroup of previous?.groups ?? []) {
+  if (groups.some((g) => g.id === prevGroup.id) || finalIds.has(prevGroup.id))
+    continue;
+  const members = prevGroup.members.filter((id) => finalIds.has(id));
+  if (members.length >= 2) groups.push({ ...prevGroup, members });
+}
+console.log(
+  `Catalogue ids: preserved ${preserved}, retargeted ${retargeted}, new ${added}, kept from before ${kept}`,
+);
+
 for (const s of structures) s.images = previousImages.get(s.id) ?? [];
 structures.sort(
   (a, b) => a.category.localeCompare(b.category) || a.en.localeCompare(b.en),
@@ -316,6 +756,7 @@ await writeFile(
     sources: [
       "BodyParts3D 4.0, © The Database Center for Life Science, CC BY 4.0",
       ...latin.sources,
+      "Skeleton, muscles, and joints: Z-Anatomy, CC BY-SA 2.1 Japan",
     ],
     structures,
     groups,

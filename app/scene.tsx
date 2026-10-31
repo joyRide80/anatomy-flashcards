@@ -5,8 +5,15 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { createExplosionLayout } from "./explosion-layout";
 import { decodeModelResponse } from "./model-download";
+import { alignMirroredWinding } from "./winding";
 import { PointerTap } from "./pointer-tap";
-import { SYSTEMS, type Atlas, type Lighting, type SceneState } from "./anatomy";
+import {
+  STUDIO_LIGHTS,
+  SYSTEMS,
+  type Atlas,
+  type Lighting,
+  type SceneState,
+} from "./anatomy";
 interface Props {
   atlas: Atlas;
   state: SceneState;
@@ -63,7 +70,7 @@ export default function AnatomyScene({
     renderer.setPixelRatio(
       Math.min(devicePixelRatio, innerWidth < 768 ? 1.5 : 2),
     );
-    renderer.setClearColor("#f2f3f3");
+    renderer.setClearColor("#e7e3db");
     renderer.outputColorSpace = T.SRGBColorSpace;
     renderer.toneMapping = T.ACESFilmicToneMapping;
     renderer.toneMappingExposure = lightingRef.current.exposure;
@@ -91,23 +98,41 @@ export default function AnatomyScene({
     let env = pmrem.fromScene(room, softness);
     scene.environment = env.texture;
     const hemisphere = new T.HemisphereLight(
-      0xf4f1ea,
-      0x6e655c,
+      STUDIO_LIGHTS.hemisphereSky,
+      STUDIO_LIGHTS.hemisphereGround,
       lightingRef.current.hemisphere,
     );
     scene.add(hemisphere);
-    const keyLight = new T.DirectionalLight(0xfffaf4, lightingRef.current.key);
-    keyLight.position.set(-2.5, 5, 2.2);
-    scene.add(keyLight);
-    const fill = new T.DirectionalLight(0xf3efe8, lightingRef.current.fill);
-    fill.position.set(2.6, 2.4, 2.2);
-    scene.add(fill);
-    const rim = new T.DirectionalLight(0xe9f0ff, lightingRef.current.rim);
-    rim.position.set(2, 2, -3);
-    scene.add(rim);
+    const viewLight = (
+      color: number,
+      intensity: number,
+      position: readonly [number, number, number],
+    ) => {
+      const light = new T.DirectionalLight(color, intensity);
+      light.position.set(position[0], position[1], position[2]);
+      camera.add(light);
+      camera.add(light.target);
+      return light;
+    };
+    const keyLight = viewLight(
+      STUDIO_LIGHTS.key.color,
+      lightingRef.current.key,
+      STUDIO_LIGHTS.key.position,
+    );
+    const fill = viewLight(
+      STUDIO_LIGHTS.fill.color,
+      lightingRef.current.fill,
+      STUDIO_LIGHTS.fill.position,
+    );
+    const rim = viewLight(
+      STUDIO_LIGHTS.rim.color,
+      lightingRef.current.rim,
+      STUDIO_LIGHTS.rim.position,
+    );
+    scene.add(camera);
     const envMaterials: T.MeshStandardMaterial[] = [];
     const groundMaterial = new T.MeshStandardMaterial({
-      color: 0xd5d9dc,
+      color: 0xd6d0c6,
       roughness: 1,
       envMapIntensity: lightingRef.current.environment,
     });
@@ -245,8 +270,13 @@ export default function AnatomyScene({
     const materialFor = (system: string) => {
       const m = new T.MeshStandardMaterial({
         color: SYSTEMS.find((s) => s.id === system)?.color ?? "#aebbb8",
-        metalness: 0.08,
-        roughness: 0.53,
+        metalness:
+          system === "skeletal" ? 0.02 : system === "joints" ? 0 : 0.08,
+        roughness:
+          system === "joints" ? 0.14 : system === "skeletal" ? 0.72 : 0.53,
+        polygonOffset: system === "joints",
+        polygonOffsetFactor: system === "joints" ? -1 : 0,
+        polygonOffsetUnits: system === "joints" ? -4 : 0,
         envMapIntensity: lightingRef.current.environment,
         side: T.DoubleSide,
         transparent: system === "integumentary",
@@ -254,6 +284,9 @@ export default function AnatomyScene({
         depthWrite: system !== "integumentary",
       });
       envMaterials.push(m);
+      // Joints stay dielectric and pick up more of the room, so cartilage and
+      // ligaments read as glossy next to the matte bone.
+      if (system === "joints") m.userData.envScale = 3.5;
       m.onBeforeCompile = (shader) => {
         shader.uniforms.partState = { value: partTexture };
         shader.uniforms.selectionState = { value: selectionTexture };
@@ -274,7 +307,7 @@ export default function AnatomyScene({
         );
         shader.fragmentShader = shader.fragmentShader.replace(
           "#include <color_fragment>",
-          "#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.694, 0.063, 0.028), partSelected);",
+          "#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.000, 0.376, 0.000), partSelected);",
         );
       };
       materials.push(m);
@@ -308,11 +341,11 @@ export default function AnatomyScene({
       side: T.DoubleSide,
     });
     const veilColor = new T.MeshStandardMaterial({
-      color: "#b08479",
-      roughness: 0.6,
+      color: SYSTEMS.find((s) => s.id === "muscular")!.color,
+      roughness: 0.55,
       envMapIntensity: lightingRef.current.environment,
       transparent: true,
-      opacity: 0.32,
+      opacity: 0.7,
       depthWrite: false,
       depthFunc: T.EqualDepth,
       side: T.DoubleSide,
@@ -339,28 +372,18 @@ export default function AnatomyScene({
       atlas.parts.forEach((p, i) => {
         if (p.chunk !== ci) return;
         const g = new T.BufferGeometry();
-        g.setAttribute(
-          "position",
-          new T.BufferAttribute(
-            new Float32Array(buffer, p.positions, p.vertexCount * 3),
-            3,
+        const position = new Float32Array(
+            buffer,
+            p.positions,
+            p.vertexCount * 3,
           ),
-        );
+          normal = new Int16Array(buffer, p.normals, p.vertexCount * 3),
+          index = new Uint32Array(buffer, p.indices, p.indexCount);
+        alignMirroredWinding(position, normal, index);
+        g.setAttribute("position", new T.BufferAttribute(position, 3));
         // GPU normalized signed-short normals keep the complete atlas compact in memory.
-        g.setAttribute(
-          "normal",
-          new T.BufferAttribute(
-            new Int16Array(buffer, p.normals, p.vertexCount * 3),
-            3,
-            true,
-          ),
-        );
-        g.setIndex(
-          new T.BufferAttribute(
-            new Uint32Array(buffer, p.indices, p.indexCount),
-            1,
-          ),
-        );
+        g.setAttribute("normal", new T.BufferAttribute(normal, 3, true));
+        g.setIndex(new T.BufferAttribute(index, 1));
         g.boundingBox = bounds[i].clone();
         g.computeBoundingSphere();
         const pick = new T.Mesh(g);
@@ -582,7 +605,8 @@ export default function AnatomyScene({
       fill.intensity = l.fill;
       rim.intensity = l.rim;
       for (const material of envMaterials)
-        material.envMapIntensity = l.environment;
+        material.envMapIntensity =
+          l.environment * (material.userData.envScale ?? 1);
       if (Math.abs(l.softness - softness) > 0.0001) {
         const nextEnv = pmrem.fromScene(room, l.softness);
         env.dispose();
@@ -711,11 +735,9 @@ export default function AnatomyScene({
       if (moving && !s.isolate)
         fit(amount > 0.5 ? "front" : s.view, Math.max(0, (amount - 0.3) / 0.7));
       const isolateKey = s.isolate
-        ? s.selected.join(",") +
+        ? (s.frame?.length ? s.frame.join(",") : s.selected.join(",")) +
           ":" +
-          (s.frame?.join(",") ?? "") +
-          ":" +
-          (s.context?.length ?? 0) +
+          (s.frame?.length ? "" : String(s.context?.length ?? 0)) +
           ":" +
           s.reset +
           ":" +

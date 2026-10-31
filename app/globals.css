@@ -1974,10 +1974,20 @@ h1 .edition {
 }
 .studio.study-explore .scene-caption {
   bottom: max(20px, env(safe-area-inset-bottom));
+  color: #1a2428;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+}
+.studio.study-explore .caption-line {
+  background: #1a242873;
 }
 @media (max-width: 767px) {
   .studio.study-explore .scene-caption {
     bottom: max(16px, env(safe-area-inset-bottom));
+    font-size: 18px;
+    color: #1a2428;
   }
 }
 

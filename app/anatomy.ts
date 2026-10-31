@@ -1,5 +1,6 @@
 export type SystemId =
   | "skeletal"
+  | "joints"
   | "muscular"
   | "arterial"
   | "venous"
@@ -23,9 +24,16 @@ export const SYSTEMS: {
   {
     id: "skeletal",
     name: "Skeleton",
-    color: "#e2d9ba",
+    color: "#e7c397",
     description:
       "Bones form the supporting framework of the body, protect organs, and provide attachment points for muscles. Their internal tissue also stores minerals and produces blood cells.",
+  },
+  {
+    id: "joints",
+    name: "Joints",
+    color: "#ffffff",
+    description:
+      "Joints are where bones meet. Capsules, ligaments, discs, menisci, and labra hold those meetings together and guide how the bones move.",
   },
   {
     id: "muscular",
@@ -123,7 +131,7 @@ export const SYSTEMS: {
     name: "Connective tissue",
     color: "#aec3bb",
     description:
-      "Cartilage, ligaments, and other connective tissues support, connect, and separate structures. Their roles include stabilizing joints and distributing mechanical loads.",
+      "Cartilage, tendons, and other connective tissues support and separate structures. Named joint ligaments, capsules, discs, and menisci are grouped in the Joints layer.",
   },
 ];
 export interface Part {
@@ -165,14 +173,26 @@ export interface Lighting {
   fill: number;
   rim: number;
 }
+/**
+ * View-locked suns from the Blender atlas file. Positions are camera-space,
+ * opposite the ray direction, so each light stays put as the view orbits.
+ * Colors are the file's linear sun colors converted to sRGB.
+ */
+export const STUDIO_LIGHTS = {
+  hemisphereSky: 0xfff4e6,
+  hemisphereGround: 0x6a5344,
+  key: { color: 0xfffcca, position: [0.707, 0.5, 0.5] as const },
+  fill: { color: 0xffd09e, position: [-0.592, -0.362, -0.72] as const },
+  rim: { color: 0xdda5ff, position: [-0.242, -0.85, 0.468] as const },
+};
 export const DEFAULT_LIGHTING: Lighting = {
-  exposure: 1,
-  environment: 0.4,
-  softness: 0.6,
-  hemisphere: 0.35,
-  key: 1.5,
-  fill: 0.3,
-  rim: 0.6,
+  exposure: 0.92,
+  environment: 0.16,
+  softness: 0.55,
+  hemisphere: 0.16,
+  key: 1.75,
+  fill: 1.05,
+  rim: 0.2,
 };
 export interface SceneState {
   inspectorOpen?: boolean;
@@ -193,6 +213,7 @@ export const DEFAULT_VISIBLE: SystemId[] = [
   "cardiac",
   "sensory",
   "skeletal",
+  "joints",
   "muscular",
   "arterial",
   "venous",
@@ -280,7 +301,11 @@ export function neighborhood(atlas: Atlas, ids: string[]): string[] {
   for (const part of atlas.parts) {
     if (own.has(part.id) || !near(part)) continue;
     if (part.system === "muscular") muscles.push(part);
-    else if (part.system === "skeletal" || part.system === "connective")
+    else if (
+      part.system === "skeletal" ||
+      part.system === "connective" ||
+      part.system === "joints"
+    )
       bones.push(part.id);
   }
   muscles.sort((a, b) => distance(a) - distance(b));
