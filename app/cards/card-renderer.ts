@@ -15,7 +15,7 @@ import type { Catalog, Structure } from "@/lib/flashcards/types";
 const CONTEXT_SYSTEMS = new Set(["skeletal", "muscular", "connective"]);
 const NOT_CONTEXT = /tooth|gingiva|papillary/i;
 
-const HIGHLIGHT = "#ff9f1a";
+const HIGHLIGHT = "#36FE28";
 const BONE = SYSTEMS.find((system) => system.id === "skeletal")!.color;
 const MUSCLE_GHOST = SYSTEMS.find((system) => system.id === "muscular")!.color;
 
@@ -169,7 +169,7 @@ async function load(host: HTMLElement, api: CardRendererApi) {
   const material = {
     highlight: new T.MeshStandardMaterial({
       color: HIGHLIGHT,
-      emissive: "#ff6a00",
+      emissive: "#36FE28",
       emissiveIntensity: 0.55,
       roughness: 0.34,
       metalness: 0.02,
@@ -177,7 +177,7 @@ async function load(host: HTMLElement, api: CardRendererApi) {
       side,
     }),
     mark: new T.MeshStandardMaterial({
-      color: "#ffa500",
+      color: "#36FE28",
       roughness: 0.48,
       metalness: 0.04,
       envMapIntensity: DEFAULT_LIGHTING.environment,

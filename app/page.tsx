@@ -258,7 +258,7 @@ export default function Home() {
   const choosePart = (id: string) => {
     const p = parts.get(id);
     if (!p) return;
-    // Name the tapped part and move the orange highlight onto it.
+    // Name the tapped part and move the selection highlight onto it.
     // The framed view stays put; the previous subject remains visible beside it.
     if (studyExplore) {
       setChosen((current) =>

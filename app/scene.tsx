@@ -307,7 +307,7 @@ export default function AnatomyScene({
         );
         shader.fragmentShader = shader.fragmentShader.replace(
           "#include <color_fragment>",
-          "#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.000, 0.376, 0.000), partSelected);",
+          "#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.212, 0.996, 0.157), partSelected);",
         );
       };
       materials.push(m);
