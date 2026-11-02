@@ -8,15 +8,9 @@ import { ChoiceList } from "./choice";
 import { buildChoices, type Game } from "./choices";
 import { canSpeak, prepareVoices, speakTerms, stopSpeaking } from "./speech";
 import { SwipeCard, type Recall } from "./swipe-card";
-import {
-  CATEGORY_LABEL,
-  ExplorerOverlay,
-  Plate,
-  capitalize,
-  catalogMaps,
-  explorerHref,
-  latinName,
-} from "./shared";
+import { ExplorerOverlay, Plate, capitalize, catalogMaps, explorerHref, latinName } from "./shared";
+import { categoryLabel, deckName, t, type StudyLanguage } from "./language";
+import { structureName } from "./structure-glossary";
 
 function currentDay(p: DeckProgress): DeckProgress {
   const day = studyDay();
@@ -30,21 +24,23 @@ function returnsIn(interval: string) {
 function RevealedTerm({
   label,
   official,
-  english,
+  meaning,
   note,
   members,
   audible,
   speaking,
   onToggleSpeak,
+  language,
 }: {
   label: string;
   official: string;
-  english: string;
+  meaning: string;
   note?: string;
   members?: string;
   audible: boolean;
   speaking: boolean;
   onToggleSpeak: () => void;
+  language: StudyLanguage;
 }) {
   return (
     <>
@@ -73,9 +69,16 @@ function RevealedTerm({
           <span>Terminologia Anatomica</span> {official}
         </p>
       )}
-      <p className="english">{english}</p>
+      <p className="english">
+        <span className="sr-only">{t(language, "structureName")}: </span>
+        {meaning}
+      </p>
       {note && <p className="note">{note}</p>}
-      {members && <p className="members">Includes {members}</p>}
+      {members && (
+        <p className="members">
+          {t(language, "includes")} {members}
+        </p>
+      )}
     </>
   );
 }
@@ -86,14 +89,14 @@ export function Session({
   initial,
   onExit,
   onRecord,
-  saveStatus,
+  language,
 }: {
   deck: Deck;
   catalog: Catalog;
   initial: DeckProgress;
   onExit: () => void;
   onRecord: (event: LearningEvent) => Promise<DeckProgress>;
-  saveStatus: string;
+  language: StudyLanguage;
 }) {
   const maps = useMemo(() => catalogMaps(catalog), [catalog]);
   const items = useMemo(
@@ -211,18 +214,21 @@ export function Session({
     return () => stopSpeaking();
   }, []);
 
-  const hear = useCallback((latin: string, english: string, force = false) => {
-    speakTerms(latin, english, setSpeaking, force);
-  }, []);
+  const hear = useCallback(
+    (latin: string, meaning: string, force = false) => {
+      speakTerms(latin, meaning, language, setSpeaking, force);
+    },
+    [language],
+  );
 
   const toggleSpeak = useCallback(() => {
     if (speaking) {
       stopSpeaking();
       setSpeaking(false);
     } else if (item && structure) {
-      hear(item.label, capitalize(structure.en), true);
+      hear(item.label, structureName(structure, language), true);
     }
-  }, [speaking, item, structure, hear]);
+  }, [speaking, item, structure, hear, language]);
 
   const commit = useCallback(
     async (_updated: DeckProgress, id: string, log?: ReviewLog) => {
@@ -456,17 +462,14 @@ export function Session({
               onExit();
           }}
           disabled={saving}
-          aria-label="Back to decks"
+          aria-label={t(language, "backToDecks")}
         >
           <ArrowLeft size={18} />
         </button>
         <div className="session-heading">
-          <h2>{deck.name}</h2>
-          {game === "choice" && <p className="session-game">Multiple choice</p>}
+          <h2>{deckName(language, deck.id, deck.name)}</h2>
+          {game === "choice" && <p className="session-game">{t(language, "multipleChoice")}</p>}
         </div>
-        <span className="session-save" role="status">
-          {saving ? "Saving review…" : saveStatus}
-        </span>
       </header>
 
       {error && (
@@ -486,18 +489,18 @@ export function Session({
 
       {!structure || !item ? (
         <section className="session-done">
-          <p className="eyebrow-serif">Session complete</p>
-          <h3>Nothing is due right now.</h3>
+          <p className="eyebrow-serif">{t(language, "sessionComplete")}</p>
+          <h3>{t(language, "nothingDue")}</h3>
           <p>
             {upcoming
               ? `The next card returns in ${formatInterval(Math.max(0, upcoming - now))}.`
-              : "Add cards to this deck to begin."}
+              : t(language, "addCards")}
             {newRemaining === 0 &&
               items.some((i) => !progress.cards[i.structureId]) &&
               ` You have reached today's limit of ${deck.newPerDay} new cards.`}
           </p>
           <button type="button" className="action" onClick={onExit}>
-            Back to decks
+            {t(language, "backToDecks")}
           </button>
         </section>
       ) : (
@@ -515,17 +518,22 @@ export function Session({
             explore={showAnswer ? () => setExplore(true) : undefined}
             onView={game === "choice" || showAnswer ? setView : undefined}
             praise={game === "choice" && choiceCorrect}
+            language={language}
           />
           <div className="answer">
-            {next!.kind === "learn" && game === "recall" && <p className="badge-new">New card</p>}
+            {next!.kind === "learn" && game === "recall" && (
+              <p className="badge-new">{t(language, "newCard")}</p>
+            )}
             {game === "choice" ? (
               <>
-                {next!.kind === "learn" && !picked && <p className="badge-new">New card</p>}
-                <p className="eyebrow-serif">{CATEGORY_LABEL[structure.category]}</p>
+                {next!.kind === "learn" && !picked && (
+                  <p className="badge-new">{t(language, "newCard")}</p>
+                )}
+                <p className="eyebrow-serif">{categoryLabel(language, structure.category)}</p>
                 {!picked ? (
                   <>
-                    <h3 className="prompt">Which structure is highlighted?</h3>
-                    <p className="hint">Choose its Latin name.</p>
+                    <h3 className="prompt">{t(language, "whichStructure")}</h3>
+                    <p className="hint">{t(language, "chooseLatin")}</p>
                   </>
                 ) : (
                   <>
@@ -533,22 +541,26 @@ export function Session({
                       className={choiceCorrect ? "verdict verdict-yes" : "verdict verdict-no"}
                       role="status"
                     >
-                      {choiceCorrect ? "Correct" : "Not this one"}
+                      {choiceCorrect ? t(language, "correct") : t(language, "notThis")}
                     </p>
                     <RevealedTerm
                       label={item.label}
                       official={official}
-                      english={capitalize(structure.en)}
+                      meaning={structureName(structure, language)}
                       note={item.note}
                       members={
                         structure.members
-                          ?.map((m) => maps.structures.get(m)?.en)
+                          ?.map((m) => {
+                            const member = maps.structures.get(m);
+                            return member ? structureName(member, language) : undefined;
+                          })
                           .filter(Boolean)
                           .join(", ") || undefined
                       }
                       audible={audible}
                       speaking={speaking}
                       onToggleSpeak={toggleSpeak}
+                      language={language}
                     />
                     <p className="hint">{choiceReturn}</p>
                   </>
@@ -566,36 +578,40 @@ export function Session({
                     onClick={advanceChoice}
                     disabled={saving || !!error}
                   >
-                    Next <kbd>Space</kbd>
+                    {t(language, "next")}
                   </button>
                 )}
               </>
             ) : !showAnswer ? (
               <>
-                <p className="eyebrow-serif">{CATEGORY_LABEL[structure.category]}</p>
-                <h3 className="prompt">Name the highlighted structure.</h3>
-                <p className="hint">Say or write the Latin term, then check.</p>
+                <p className="eyebrow-serif">{categoryLabel(language, structure.category)}</p>
+                <h3 className="prompt">{t(language, "nameStructure")}</h3>
+                <p className="hint">{t(language, "sayLatin")}</p>
                 <button type="button" className="action" onClick={() => setRevealed(true)}>
-                  Show answer <kbd>Space</kbd>
+                  {t(language, "showAnswer")}
                 </button>
               </>
             ) : (
               <>
-                <p className="eyebrow-serif">{CATEGORY_LABEL[structure.category]}</p>
+                <p className="eyebrow-serif">{categoryLabel(language, structure.category)}</p>
                 <RevealedTerm
                   label={item.label}
                   official={official}
-                  english={capitalize(structure.en)}
+                  meaning={structureName(structure, language)}
                   note={item.note}
                   members={
                     structure.members
-                      ?.map((m) => maps.structures.get(m)?.en)
+                      ?.map((m) => {
+                        const member = maps.structures.get(m);
+                        return member ? structureName(member, language) : undefined;
+                      })
                       .filter(Boolean)
                       .join(", ") || undefined
                   }
                   audible={audible}
                   speaking={speaking}
                   onToggleSpeak={toggleSpeak}
+                  language={language}
                 />
                 {next!.kind === "learn" && (
                   <button
@@ -604,7 +620,7 @@ export function Session({
                     onClick={learn}
                     disabled={saving || !!error}
                   >
-                    Got it <kbd>Space</kbd>
+                    {t(language, "gotIt")}
                   </button>
                 )}
               </>
@@ -615,7 +631,7 @@ export function Session({
       {explore && structure && (
         <ExplorerOverlay
           src={explorerHref(structure)}
-          title={capitalize(structure.en)}
+          title={structureName(structure, language)}
           onClose={() => setExplore(false)}
         />
       )}

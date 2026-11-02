@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import type { Catalog, Category, Structure } from "@/lib/flashcards/types";
+import { t, viewName, type StudyLanguage } from "./language";
 
 const CLOSE_EXPLORE = "human-atlas:close-explore";
 
@@ -13,8 +14,7 @@ export const CATEGORY_LABEL: Record<Category, string> = {
 };
 
 /** Preferred Latin term without TA's bracketed numbering, e.g. "atlas [C I]" → "atlas". */
-export const latinName = (s: Structure) =>
-  (s.la[0] ?? s.en).replace(/\s*\[[^\]]*\]/g, "");
+export const latinName = (s: Structure) => (s.la[0] ?? s.en).replace(/\s*\[[^\]]*\]/g, "");
 export const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export function catalogMaps(catalog: Catalog) {
@@ -102,6 +102,7 @@ export function Plate({
   explore,
   onView,
   praise = false,
+  language = "en",
 }: {
   structure: Structure;
   view: number;
@@ -110,6 +111,7 @@ export function Plate({
   onView?: (index: number) => void;
   /** A correct multiple-choice answer. Stamps the picture. */
   praise?: boolean;
+  language?: StudyLanguage;
 }) {
   const images = structure.images;
   const image = images[view % Math.max(1, images.length)];
@@ -120,7 +122,7 @@ export function Plate({
           <img
             key={image.src}
             src={image.src}
-            alt={`Highlighted structure, ${image.view} view`}
+            alt={`Highlighted structure, ${viewName(language, image.view)} view`}
             draggable={false}
           />
         ) : (
@@ -133,13 +135,13 @@ export function Plate({
         )}
         {explore && (
           <button type="button" className="plate-explore" onClick={explore}>
-            Explore in 3D
+            {t(language, "explore3d")}
           </button>
         )}
       </div>
       {onView && images.length > 1 && (
         <figcaption>
-          <span className="plate-views" role="group" aria-label="Views">
+          <span className="plate-views" role="group" aria-label={t(language, "views")}>
             {images.map((img, i) => (
               <button
                 key={img.src}
@@ -147,7 +149,7 @@ export function Plate({
                 aria-pressed={i === view % images.length}
                 onClick={() => onView(i)}
               >
-                {img.view}
+                {viewName(language, img.view)}
               </button>
             ))}
           </span>

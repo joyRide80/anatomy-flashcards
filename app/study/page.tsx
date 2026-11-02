@@ -16,10 +16,15 @@ import type { Catalog, Deck, DeckProgress } from "@/lib/flashcards/types";
 import { Library } from "./library";
 import { Session } from "./session";
 import { prepareVoices } from "./speech";
+import { STUDY_LANGUAGES, type StudyLanguage, t } from "./language";
+import { AppTabBar } from "../app-tab-bar";
 
 const empty: LearningSnapshot = { events: [], selections: [], legacyDecks: [] };
 type SyncState = { kind: "local" | "syncing" | "synced" | "error"; message: string };
 let migration: Promise<void> | null = null;
+
+const libraryTabFromLocation = () =>
+  new URLSearchParams(window.location.search).get("tab") === "mine" ? "mine" : "discover";
 
 export default function StudyPage() {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
@@ -31,6 +36,8 @@ export default function StudyPage() {
   const [sync, setSync] = useState<SyncState>({ kind: "local", message: "Saved on this device" });
   const [screen, setScreen] = useState<{ deck: Deck; progress: DeckProgress } | null>(null);
   const [clock, setClock] = useState(Date.now());
+  const [language, setLanguage] = useState<StudyLanguage>("en");
+  const [libraryTab, setLibraryTab] = useState<"discover" | "mine">(libraryTabFromLocation);
   const store = useMemo(() => learningStore(user?.id), [user?.id]);
   const projection = useMemo(
     () => projectLearning(snapshot.events, clock),
@@ -48,6 +55,8 @@ export default function StudyPage() {
 
   useEffect(() => {
     document.title = "Anatomy Flashcards";
+    const saved = window.localStorage.getItem("human-atlas:study-language");
+    if (saved === "en" || saved === "nb" || saved === "da") setLanguage(saved);
     prepareVoices();
     const controller = new AbortController();
     fetch("/cards/catalog.json", { signal: controller.signal })
@@ -66,6 +75,25 @@ export default function StudyPage() {
       clearInterval(timer);
     };
   }, [fail]);
+
+  const changeLanguage = (value: StudyLanguage) => {
+    setLanguage(value);
+    window.localStorage.setItem("human-atlas:study-language", value);
+  };
+
+  const changeLibraryTab = (tab: "discover" | "mine") => {
+    const url = new URL(window.location.href);
+    if (tab === "mine") url.searchParams.set("tab", "mine");
+    else url.searchParams.delete("tab");
+    window.history.pushState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    setLibraryTab(tab);
+  };
+
+  useEffect(() => {
+    const syncLibraryTab = () => setLibraryTab(libraryTabFromLocation());
+    window.addEventListener("popstate", syncLibraryTab);
+    return () => window.removeEventListener("popstate", syncLibraryTab);
+  }, []);
 
   useEffect(() => {
     if (!cloud) return;
@@ -195,9 +223,20 @@ export default function StudyPage() {
           <a href="/" className="brand">
             Anatomy Flashcards
           </a>
-          <span className={`save-status ${sync.kind}`} role="status">
-            {sync.message}
-          </span>
+          <label className="study-language">
+            <span className="sr-only">{t(language, "language")}</span>
+            <select
+              value={language}
+              onChange={(event) => changeLanguage(event.target.value as StudyLanguage)}
+              aria-label={t(language, "language")}
+            >
+              {STUDY_LANGUAGES.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </header>
       )}
       <main className="study-main">
@@ -223,7 +262,7 @@ export default function StudyPage() {
               setClock(Date.now());
             }}
             onRecord={record}
-            saveStatus={sync.message}
+            language={language}
           />
         ) : (
           <>
@@ -237,6 +276,9 @@ export default function StudyPage() {
               onSelect={(id, selected) => {
                 void store.select(id, selected).catch(fail);
               }}
+              language={language}
+              tab={libraryTab}
+              onTabChange={changeLibraryTab}
             />
             <AccountPanel
               user={user}
@@ -275,6 +317,9 @@ export default function StudyPage() {
           </>
         )}
       </main>
+      {!screen && (
+        <AppTabBar active={libraryTab === "mine" ? "progress" : "flashcards"} language={language} />
+      )}
     </div>
   );
 }

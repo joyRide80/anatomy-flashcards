@@ -6,7 +6,6 @@ import {
   ArrowUpRight,
   ChevronRight,
   Focus,
-  GalleryVerticalEnd,
   Info,
   Layers3,
   Pause,
@@ -20,12 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import {
-  Sheet,
-  SheetContent,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import {
   Combobox,
   ComboboxInput,
@@ -35,6 +29,7 @@ import {
   ComboboxEmpty,
 } from "@/components/ui/combobox";
 import AnatomyScene from "./scene";
+import { AppTabBar } from "./app-tab-bar";
 import {
   DEFAULT_LIGHTING,
   DEFAULT_VISIBLE,
@@ -102,8 +97,7 @@ export default function Home() {
     setState({ ...initial, visible: DEFAULT_VISIBLE });
     fetch("/models/atlas.json", { signal: abort.signal })
       .then((r) => {
-        if (!r.ok)
-          throw new Error("The anatomy catalogue could not be loaded.");
+        if (!r.ok) throw new Error("The anatomy catalogue could not be loaded.");
         return r.json();
       })
       .then((json: unknown) => {
@@ -163,10 +157,7 @@ export default function Home() {
           return;
         }
         e.preventDefault();
-        window.parent.postMessage(
-          { type: "human-atlas:close-explore" },
-          location.origin,
-        );
+        window.parent.postMessage({ type: "human-atlas:close-explore" }, location.origin);
         return;
       }
       if (
@@ -183,24 +174,16 @@ export default function Home() {
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   }, [studyExplore, panel, about, details]);
-  const parts = useMemo(
-    () => new Map(atlas?.parts.map((p) => [p.id, p])),
-    [atlas],
-  );
+  const parts = useMemo(() => new Map(atlas?.parts.map((p) => [p.id, p])), [atlas]);
   const counts = useMemo(
     () =>
       Object.fromEntries(
-        SYSTEMS.map((s) => [
-          s.id,
-          atlas?.parts.filter((p) => p.system === s.id).length ?? 0,
-        ]),
+        SYSTEMS.map((s) => [s.id, atlas?.parts.filter((p) => p.system === s.id).length ?? 0]),
       ),
     [atlas],
   );
   const activeSystems = SYSTEMS.filter((s) => counts[s.id] > 0);
-  const selectedParts = state.selected
-      .map((id) => parts.get(id))
-      .filter((p) => !!p),
+  const selectedParts = state.selected.map((id) => parts.get(id)).filter((p) => !!p),
     selected = selectedParts[0],
     system = SYSTEMS.find((s) => s.id === selected?.system);
   const removedIds = new Set(state.removed);
@@ -225,16 +208,10 @@ export default function Home() {
         "urinary bladder",
         "trachea",
       ]
-        .map((name) =>
-          atlas.concepts.find((c) => c.name.toLowerCase() === name),
-        )
+        .map((name) => atlas.concepts.find((c) => c.name.toLowerCase() === name))
         .filter((x): x is Concept => !!x);
     return atlas.concepts
-      .filter(
-        (c) =>
-          c.name.toLowerCase().includes(term) ||
-          c.id.toLowerCase().includes(term),
-      )
+      .filter((c) => c.name.toLowerCase().includes(term) || c.id.toLowerCase().includes(term))
       .sort((a, b) => a.name.length - b.name.length)
       .slice(0, 80);
   }, [atlas, query]);
@@ -262,9 +239,7 @@ export default function Home() {
     // The framed view stays put; the previous subject remains visible beside it.
     if (studyExplore) {
       setChosen((current) =>
-        current
-          ? { ...current, name: p.name }
-          : { id: p.conceptId, name: p.name, elements: [id] },
+        current ? { ...current, name: p.name } : { id: p.conceptId, name: p.name, elements: [id] },
       );
       setState((s) => {
         if (s.selected.length === 1 && s.selected[0] === id) return s;
@@ -293,9 +268,7 @@ export default function Home() {
       ...s,
       selected: [],
       isolate: false,
-      visible: s.visible.includes(id)
-        ? s.visible.filter((x) => x !== id)
-        : [...s.visible, id],
+      visible: s.visible.includes(id) ? s.visible.filter((x) => x !== id) : [...s.visible, id],
     }));
   };
   const reset = () => {
@@ -311,9 +284,7 @@ export default function Home() {
     setPanel(null);
   };
   const removePart = (id: string) => {
-    setState((s) =>
-      s.removed.includes(id) ? s : { ...s, removed: [...s.removed, id] },
-    );
+    setState((s) => (s.removed.includes(id) ? s : { ...s, removed: [...s.removed, id] }));
   };
   const toggleKnife = () => {
     setDetails(false);
@@ -373,15 +344,11 @@ export default function Home() {
           </Badge>
         </h1>
         <div className="identity-meta">
-          {atlas ? atlas.parts.length.toLocaleString() : "2,815"} modeled pieces{" "}
-          <span>·</span> Z-Anatomy · BodyParts3D
+          {atlas ? atlas.parts.length.toLocaleString() : "2,815"} modeled pieces <span>·</span>{" "}
+          Z-Anatomy · BodyParts3D
         </div>
       </header>
       <nav className="top-actions" aria-label="Explorer panels">
-        <a className="study-link" href="/">
-          <GalleryVerticalEnd size={18} />
-          <span>Flash cards</span>
-        </a>
         <Button
           variant="ghost"
           className={panel === "search" ? "active" : ""}
@@ -441,9 +408,7 @@ export default function Home() {
         <div className="layer-presets">
           <Button
             variant="ghost"
-            aria-pressed={activeSystems.every((x) =>
-              state.visible.includes(x.id),
-            )}
+            aria-pressed={activeSystems.every((x) => state.visible.includes(x.id))}
             onClick={() =>
               setState((s) => ({
                 ...s,
@@ -457,9 +422,7 @@ export default function Home() {
           </Button>
           <Button
             variant="ghost"
-            aria-pressed={
-              state.visible.length === 1 && state.visible[0] === "skeletal"
-            }
+            aria-pressed={state.visible.length === 1 && state.visible[0] === "skeletal"}
             onClick={() =>
               setState((s) => ({
                 ...s,
@@ -475,14 +438,9 @@ export default function Home() {
             variant="ghost"
             aria-pressed={
               state.visible.length === 6 &&
-              [
-                "cardiac",
-                "respiratory",
-                "digestive",
-                "urinary",
-                "endocrine",
-                "reproductive",
-              ].every((id) => state.visible.includes(id as SystemId))
+              ["cardiac", "respiratory", "digestive", "urinary", "endocrine", "reproductive"].every(
+                (id) => state.visible.includes(id as SystemId),
+              )
             }
             onClick={() =>
               setState((s) => ({
@@ -592,8 +550,7 @@ export default function Home() {
                   <ComboboxItem key={c.id} value={c}>
                     <span className="search-result-name">{c.name}</span>
                     <span className="small-number">
-                      {c.elements.length}{" "}
-                      {c.elements.length === 1 ? "piece" : "pieces"}
+                      {c.elements.length} {c.elements.length === 1 ? "piece" : "pieces"}
                     </span>
                   </ComboboxItem>
                 )}
@@ -640,10 +597,7 @@ export default function Home() {
           </div>
           <div className="panel-foot">
             <span>Studio setup</span>
-            <Button
-              variant="ghost"
-              onClick={() => setLighting(DEFAULT_LIGHTING)}
-            >
+            <Button variant="ghost" onClick={() => setLighting(DEFAULT_LIGHTING)}>
               Reset
             </Button>
           </div>
@@ -686,19 +640,12 @@ export default function Home() {
           variant="ghost"
           aria-pressed={state.knife}
           aria-label={state.knife ? "Turn off knife mode" : "Knife mode"}
-          title={
-            state.knife
-              ? "Knife mode — click a structure to remove it"
-              : "Knife mode"
-          }
+          title={state.knife ? "Knife mode — click a structure to remove it" : "Knife mode"}
           className={state.knife ? "active" : ""}
           onClick={toggleKnife}
         >
           <svg className="size-[18px]" viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              fill="currentColor"
-              d="M1.6 2.2 15.2 12.8 11.5 16.8 3.6 8.6Z"
-            />
+            <path fill="currentColor" d="M1.6 2.2 15.2 12.8 11.5 16.8 3.6 8.6Z" />
             <path
               d="M13 15.6 22.2 23"
               fill="none"
@@ -708,12 +655,7 @@ export default function Home() {
             />
           </svg>
         </Button>
-        <Button
-          variant="ghost"
-          aria-label="Reset view and layers"
-          title="Reset"
-          onClick={reset}
-        >
+        <Button variant="ghost" aria-label="Reset view and layers" title="Reset" onClick={reset}>
           <RotateCcw size={17} />
         </Button>
       </nav>
@@ -788,13 +730,12 @@ export default function Home() {
         <span>
           {state.knife ? (
             <>
-              Knife mode <b>·</b> Click a structure to remove it <b>·</b> Reset
-              restores
+              Knife mode <b>·</b> Click a structure to remove it <b>·</b> Reset restores
             </>
           ) : (
             <>
-              {state.explode > 0.8 ? "Drag to pan" : "Drag to orbit"} <b>·</b>{" "}
-              Pinch to zoom <b>·</b> Tap to inspect
+              {state.explode > 0.8 ? "Drag to pan" : "Drag to orbit"} <b>·</b> Pinch to zoom{" "}
+              <b>·</b> Tap to inspect
             </>
           )}
         </span>
@@ -816,8 +757,7 @@ export default function Home() {
           <div>
             <strong>Preparing the anatomy</strong>
             <span>
-              {progress}% · Loading{" "}
-              {atlas?.parts.length.toLocaleString() ?? "2,815"} pieces
+              {progress}% · Loading {atlas?.parts.length.toLocaleString() ?? "2,815"} pieces
             </span>
             <div className="loading-track">
               <i style={{ width: `${progress}%` }} />
@@ -845,24 +785,15 @@ export default function Home() {
           showCloseButton={true}
         >
           <div className="detail-header">
-            <div
-              className="detail-accent"
-              style={{ background: system?.color }}
-            />
+            <div className="detail-accent" style={{ background: system?.color }} />
             <div className="eyebrow">{system?.name ?? "ANATOMY"}</div>
-            <SheetTitle
-              ref={detailTitle}
-              tabIndex={-1}
-              className="structure-title"
-            >
+            <SheetTitle ref={detailTitle} tabIndex={-1} className="structure-title">
               {chosen?.name}
             </SheetTitle>
           </div>
           <div className="detail-scroll" key={`${chosen?.id}-${state.isolate}`}>
             <SheetDescription className="structure-description">
-              {chosen && selected
-                ? explanation(chosen.name, selected.system)
-                : ""}
+              {chosen && selected ? explanation(chosen.name, selected.system) : ""}
             </SheetDescription>
             {chosen && !EXPLANATIONS[chosen.name.toLowerCase()] && (
               <span className="context-note">
@@ -882,11 +813,7 @@ export default function Home() {
               <div className="member-list">
                 <h3>Included structures</h3>
                 {selectedParts.slice(0, 50).map((p) => (
-                  <Button
-                    variant="ghost"
-                    key={p.id}
-                    onClick={() => choosePart(p.id)}
-                  >
+                  <Button variant="ghost" key={p.id} onClick={() => choosePart(p.id)}>
                     <span>{p.name}</span>
                     <ChevronRight size={14} />
                   </Button>
@@ -957,38 +884,33 @@ export default function Home() {
           <div className="eyebrow">SOURCE & SCOPE</div>
           <SheetTitle className="structure-title">A body, revealed.</SheetTitle>
           <SheetDescription>
-            Explore an adult male reference. The skeleton, muscles, and joints
-            are one Z-Anatomy model. The organs and vessels remain BodyParts3D.
+            Explore an adult male reference. The skeleton, muscles, and joints are one Z-Anatomy
+            model. The organs and vessels remain BodyParts3D.
           </SheetDescription>
           <div className="about-copy">
             <p>
               <strong>Male · Z-Anatomy skeleton, muscles, and joints</strong>
               <br />
-              {(atlas?.parts.length ?? 2815).toLocaleString()} individual meshes
-              and {(atlas?.concepts.length ?? 3529).toLocaleString()} named
-              concepts. Bones, muscles, and joints come from the same Z-Anatomy
-              file, so those layers meet. Arteries, veins, nerves, and organs
-              remain BodyParts3D 4.0.
+              {(atlas?.parts.length ?? 2815).toLocaleString()} individual meshes and{" "}
+              {(atlas?.concepts.length ?? 3529).toLocaleString()} named concepts. Bones, muscles,
+              and joints come from the same Z-Anatomy file, so those layers meet. Arteries, veins,
+              nerves, and organs remain BodyParts3D 4.0.
             </p>
             <p>
-              This reference does not contain every human structure or
-              variation. Named concepts can contain multiple pieces; each source
-              mesh is rendered once.
+              This reference does not contain every human structure or variation. Named concepts can
+              contain multiple pieces; each source mesh is rendered once.
             </p>
             <p>
-              Colors and system groupings are designed for exploration. The
-              geometry is simplified for the web, and short explanations provide
-              general educational context. This is an anatomical reference, not
-              a diagnostic or surgical tool.
+              Colors and system groupings are designed for exploration. The geometry is simplified
+              for the web, and short explanations provide general educational context. This is an
+              anatomical reference, not a diagnostic or surgical tool.
             </p>
             <h3>Source</h3>
             <p>
-              BodyParts3D, © The Database Center for Life Science licensed under
-              CC Attribution 4.0 International, supplies the organs, vessels,
-              and nerves. The skeleton, muscles, and joints are from Z-Anatomy,
-              which adapts BodyParts3D and distributes that work under CC BY-SA
-              2.1 Japan. Both attributions apply when you share the combined
-              atlas.
+              BodyParts3D, © The Database Center for Life Science licensed under CC Attribution 4.0
+              International, supplies the organs, vessels, and nerves. The skeleton, muscles, and
+              joints are from Z-Anatomy, which adapts BodyParts3D and distributes that work under CC
+              BY-SA 2.1 Japan. Both attributions apply when you share the combined atlas.
             </p>
             <a
               href="https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html"
@@ -1021,6 +943,9 @@ export default function Home() {
           </div>
         </SheetContent>
       </Sheet>
+      {!studyExplore && !panel && !details && !about && !lightOpen && (
+        <AppTabBar active="explore" />
+      )}
     </main>
   );
 }

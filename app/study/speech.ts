@@ -55,12 +55,13 @@ type Line = { text: string; lang: string; voice?: SpeechSynthesisVoice };
 
 function linesFor(
   latin: string,
-  english: string,
+  meaning: string,
+  language: "en" | "nb" | "da",
   voices: SpeechSynthesisVoice[],
   plain: boolean,
 ): Line[] {
   const term = latin.replace(/\s*\[[^\]]*\]/g, "").trim();
-  const gloss = english.trim();
+  const gloss = meaning.trim();
   const lines: Line[] = [];
   if (!term) return lines;
 
@@ -76,7 +77,7 @@ function linesFor(
   }
 
   const latinVoice = pick(voices, "la") ?? pick(voices, "it") ?? fallback;
-  const englishVoice = pick(voices, "en") ?? fallback;
+  const meaningVoice = pick(voices, language) ?? pick(voices, "en") ?? fallback;
   lines.push({
     text: term,
     lang: latinVoice?.lang ?? "en-US",
@@ -85,8 +86,8 @@ function linesFor(
   if (gloss && gloss.toLowerCase() !== term.toLowerCase())
     lines.push({
       text: gloss,
-      lang: englishVoice?.lang ?? "en-US",
-      voice: englishVoice,
+      lang: meaningVoice?.lang ?? "en-US",
+      voice: meaningVoice,
     });
   return lines;
 }
@@ -144,19 +145,20 @@ export function prepareVoices() {
 }
 
 /**
- * Speaks the Latin term, then the English name. Latin uses a Latin voice when
- * the browser has one, otherwise Italian. `force` replays even if this card
- * just started speaking.
+ * Speaks the Latin term, then the selected interface-language meaning. Latin
+ * uses a Latin voice when the browser has one, otherwise Italian. `force`
+ * replays even if this card just started speaking.
  */
 export function speakTerms(
   latin: string,
-  english: string,
+  meaning: string,
+  language: "en" | "nb" | "da",
   onState: (speaking: boolean) => void,
   force = false,
 ) {
   if (!supported()) return;
   const synth = window.speechSynthesis;
-  const key = `${latin}\n${english}`;
+  const key = `${latin}\n${meaning}\n${language}`;
   // A second call from the effect must not cancel speech that a click just started.
   if (!force && key === lastKey && performance.now() - lastAt < 1000) return;
   lastKey = key;
@@ -173,7 +175,7 @@ export function speakTerms(
 
   const speakAll = (plain: boolean) => {
     if (mine !== generation) return;
-    const lines = linesFor(latin, english, synth.getVoices(), plain);
+    const lines = linesFor(latin, meaning, language, synth.getVoices(), plain);
     if (!lines.length) return;
 
     const speakAt = (index: number) => {

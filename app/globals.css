@@ -101,6 +101,39 @@ button {
 button:not([data-slot]):hover {
   background: #18253608;
 }
+.app-tab-bar {
+  position: fixed;
+  z-index: 100;
+  top: 18px;
+  left: 50%;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #18253616;
+  border-radius: 999px;
+  background: #f8faf9e8;
+  box-shadow: 0 8px 28px #1825360d;
+  backdrop-filter: blur(18px) saturate(1.2);
+  transform: translateX(-50%);
+}
+.app-tab-bar a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 13px;
+  border-radius: 999px;
+  color: #66727a;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  text-decoration: none;
+}
+.app-tab-bar a[aria-current="page"] {
+  background: #263b48;
+  color: #fff;
+  font-weight: 700;
+}
 .studio {
   height: 100dvh;
   min-height: 340px;
@@ -122,11 +155,7 @@ button:not([data-slot]):hover {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(
-    ellipse at 51% 43%,
-    transparent 35%,
-    #83919e0f 100%
-  );
+  background: radial-gradient(ellipse at 51% 43%, transparent 35%, #83919e0f 100%);
 }
 .glass {
   background: #ffffffeb;
@@ -768,6 +797,49 @@ body:has(.detail-sheet) [data-slot="sheet-overlay"] {
   }
 }
 @media (max-width: 767px) {
+  .app-tab-bar {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: end;
+    min-height: 68px;
+    padding: 8px max(12px, env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom))
+      max(12px, env(safe-area-inset-left));
+    border-top: 1px solid #1825361c;
+    background: #f8faf9e8;
+    box-shadow: 0 -8px 28px #1825360d;
+    backdrop-filter: blur(18px) saturate(1.2);
+    transform: none;
+  }
+  .app-tab-bar a {
+    display: grid;
+    min-width: 0;
+    justify-items: center;
+    gap: 3px;
+    padding: 5px 4px;
+    color: #717b82;
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 1.15;
+    text-decoration: none;
+  }
+  .app-tab-bar a[aria-current="page"] {
+    background: transparent;
+    color: #263b48;
+    font-weight: 700;
+  }
+  .app-tab-bar a[aria-current="page"] svg {
+    filter: drop-shadow(0 2px 4px #263b4822);
+  }
+  .top-actions .study-link {
+    display: none;
+  }
+  .studio .bottom-dock {
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + 72px);
+  }
   .mobile-only {
     display: flex;
   }
