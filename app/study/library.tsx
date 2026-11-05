@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUpRight, Bookmark, Check, Search } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { counts } from "@/lib/srs";
 import type { CuratedDeck } from "@/lib/flashcards/decks";
 import type { DeckSelection, projectLearning } from "@/lib/flashcards/learning-model";
@@ -24,6 +25,24 @@ const searchKey = (value: string) =>
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/ø/g, "o")
     .replace(/æ/g, "ae");
+
+function SaveDeckIcon({ selected }: { selected: boolean }) {
+  const reduced = useReducedMotion();
+  return (
+    <AnimatePresence initial={false} mode="popLayout">
+      <motion.span
+        key={selected ? "saved" : "unsaved"}
+        className="save-deck-icon"
+        initial={reduced ? false : { opacity: 0, scale: 0.3, filter: "blur(3px)" }}
+        animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+        exit={reduced ? undefined : { opacity: 0, scale: 0.3, filter: "blur(3px)" }}
+        transition={reduced ? { duration: 0 } : { type: "spring", duration: 0.35, bounce: 0 }}
+      >
+        {selected ? <Check size={18} /> : <Bookmark size={18} />}
+      </motion.span>
+    </AnimatePresence>
+  );
+}
 
 export function Library({
   catalog,
@@ -200,59 +219,63 @@ export function Library({
             const isPreview = preview === deck.id;
             return (
               <article className="catalog-card" key={deck.id}>
-                <div className="catalog-card-top">
-                  <span className="deck-category">
-                    {categoryLabel(language, deck.category)}{" "}
-                    <span> / {regionName(language, deck.region)}</span>
-                  </span>
-                  <button
-                    className="save-deck"
-                    aria-label={`${isSelected ? "Remove" : "Add"} ${deckName(language, deck.id, deck.name)} ${isSelected ? "from" : "to"} My learning`}
-                    aria-pressed={isSelected}
-                    onClick={() => onSelect(deck.id, !isSelected)}
-                  >
-                    {isSelected ? <Check size={18} /> : <Bookmark size={18} />}
-                  </button>
-                </div>
+                <button
+                  className="save-deck"
+                  aria-label={`${isSelected ? "Remove" : "Add"} ${deckName(language, deck.id, deck.name)} ${isSelected ? "from" : "to"} My learning`}
+                  aria-pressed={isSelected}
+                  onClick={() => onSelect(deck.id, !isSelected)}
+                >
+                  <SaveDeckIcon selected={isSelected} />
+                </button>
                 <button type="button" className="catalog-card-open" onClick={() => onStudy(deck)}>
                   <div className="deck-cover">
                     {structures[0] && <Thumb structure={structures[0]} />}
                     {deck.featured && (
                       <span className="starter-label">{t(language, "goodPlaceToStart")}</span>
                     )}
+                    <div className="deck-progress">
+                      <progress
+                        max={deck.items.length}
+                        value={started}
+                        aria-label={`${introducedCount(language, started)} of ${cardCount(language, deck.items.length)}`}
+                      />
+                    </div>
                   </div>
-                  <h3>{deckName(language, deck.id, deck.name)}</h3>
-                </button>
-                <div className="deck-metadata">
-                  <span>{cardCount(language, deck.items.length)}</span>
-                  <span>
-                    {started ? introducedCount(language, started) : t(language, "readyToStudy")}
-                  </span>
-                  {c.review + c.learning > 0 && (
-                    <span className="due-label">
-                      {practiceCount(language, c.review + c.learning)}
+                  <div className="catalog-card-heading">
+                    <span className="deck-category">
+                      {categoryLabel(language, deck.category)}{" "}
+                      <span> / {regionName(language, deck.region)}</span>
                     </span>
-                  )}
-                </div>
-                {started > 0 && (
-                  <progress
-                    max={deck.items.length}
-                    value={started}
-                    aria-label={`${introducedCount(language, started)} of ${cardCount(language, deck.items.length)}`}
-                  />
-                )}
-                <div className="catalog-card-actions">
-                  <button type="button" className="action" onClick={() => onStudy(deck)}>
-                    {started ? t(language, "studyDeck") : t(language, "startDeck")}
-                  </button>
-                  <button
-                    className="link"
-                    aria-expanded={isPreview}
-                    aria-controls={`preview-${deck.id}`}
-                    onClick={() => setPreview(isPreview ? null : deck.id)}
-                  >
-                    {isPreview ? t(language, "hideCards") : t(language, "previewCards")}
-                  </button>
+                    <h3>{deckName(language, deck.id, deck.name)}</h3>
+                  </div>
+                </button>
+                <div className="catalog-card-body">
+                  <div className="deck-metadata">
+                    <span>{cardCount(language, deck.items.length)}</span>
+                    <span>
+                      {started
+                        ? introducedCount(language, started)
+                        : t(language, "readyToStudy")}
+                    </span>
+                    {c.review + c.learning > 0 && (
+                      <span className="due-label">
+                        {practiceCount(language, c.review + c.learning)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="catalog-card-actions">
+                    <button type="button" className="action" onClick={() => onStudy(deck)}>
+                      {started ? t(language, "studyDeck") : t(language, "startDeck")}
+                    </button>
+                    <button
+                      className="link"
+                      aria-expanded={isPreview}
+                      aria-controls={`preview-${deck.id}`}
+                      onClick={() => setPreview(isPreview ? null : deck.id)}
+                    >
+                      {isPreview ? t(language, "hideCards") : t(language, "previewCards")}
+                    </button>
+                  </div>
                 </div>
                 {isPreview && (
                   <div className="deck-preview" id={`preview-${deck.id}`}>

@@ -19,6 +19,15 @@ const HIGHLIGHT = "#36FE28";
 const BONE = SYSTEMS.find((system) => system.id === "skeletal")!.color;
 const MUSCLE_GHOST = SYSTEMS.find((system) => system.id === "muscular")!.color;
 
+// These small foot bones need surrounding anatomy for orientation instead of an
+// isolated close-up. The bilateral third toe needs the full foot span; the
+// cuneiform and individual toe phalanges only need their local foot region.
+const FULL_CONTEXT_FRAME_IDS = new Set(["distal-phalanx-of-third-toe"]);
+const REGIONAL_CONTEXT_FRAME_IDS = new Set([
+  "intermediate-cuneiform-bone",
+  "proximal-phalanx-of-second-toe",
+]);
+
 interface ViewDirection {
   /** Name of this camera direction. */
   name: string;
@@ -275,6 +284,9 @@ async function load(host: HTMLElement, api: CardRendererApi) {
     return Math.max(s.x, s.y, s.z);
   };
 
+  /** A compact regional view for tiny structures that lose their landmarks in isolation. */
+  const regionalFrame = (bounds: T.Box3) => bounds.clone().expandByScalar(0.04);
+
   /** Output framing leaves a wide margin for neighboring anatomy. `score` frames every direction alike so their scores compare fairly. */
   function frame(bounds: T.Box3, v: ViewDirection, score = false) {
     const center = bounds.getCenter(new T.Vector3());
@@ -350,7 +362,13 @@ async function load(host: HTMLElement, api: CardRendererApi) {
     const subject = meshBox(s.parts);
     // Both sides share the picture when they fit in the usual frame. A fingertip
     // stays a close-up of one side, because the other hand would shrink it to a speck.
-    const framed = longest(subject) <= longest(one) * 4 ? subject : one;
+    const framed = FULL_CONTEXT_FRAME_IDS.has(s.id)
+      ? subject
+      : REGIONAL_CONTEXT_FRAME_IDS.has(s.id)
+        ? regionalFrame(one)
+      : longest(subject) <= longest(one) * 4
+        ? subject
+        : one;
     const targets = s.parts.map((p) => meshes.get(p)!).filter(Boolean);
     const targetSet = new Set(targets);
     const { bones, muscles } = context(s, framed, one);

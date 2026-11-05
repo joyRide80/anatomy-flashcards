@@ -1,5 +1,10 @@
 MIT License
 
+This license applies only to the original application source code in this
+repository. The bundled anatomy geometry, derived binary chunks, and rendered
+anatomy images are third-party data with separate terms; see
+public/ATTRIBUTION.md.
+
 Copyright (c) 2026 ashemag
 
 Permission is hereby granted, free of charge, to any person obtaining a copy

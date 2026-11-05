@@ -756,7 +756,7 @@ await writeFile(
     sources: [
       "BodyParts3D 4.0, © The Database Center for Life Science, CC BY 4.0",
       ...latin.sources,
-      "Skeleton, muscles, and joints: Z-Anatomy, CC BY-SA 2.1 Japan",
+      "Skeleton, muscles, and joints: Z-Anatomy, CC BY-SA 4.0 (includes required BodyParts3D attribution)",
     ],
     structures,
     groups,

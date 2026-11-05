@@ -201,7 +201,7 @@ catalog.structures = structures;
 catalog.groups = groups;
 if (!catalog.sources.some((source) => source.includes("Z-Anatomy"))) {
   catalog.sources.push(
-    "Skeleton, muscles, and joints: Z-Anatomy, CC BY-SA 2.1 Japan",
+    "Skeleton, muscles, and joints: Z-Anatomy, CC BY-SA 4.0 (includes required BodyParts3D attribution)",
   );
 }
 writeFileSync(

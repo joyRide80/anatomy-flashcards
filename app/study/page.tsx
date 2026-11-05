@@ -76,6 +76,14 @@ export default function StudyPage() {
     };
   }, [fail]);
 
+  useEffect(() => {
+    const previousLanguage = document.documentElement.lang;
+    document.documentElement.lang = language;
+    return () => {
+      document.documentElement.lang = previousLanguage;
+    };
+  }, [language]);
+
   const changeLanguage = (value: StudyLanguage) => {
     setLanguage(value);
     window.localStorage.setItem("human-atlas:study-language", value);

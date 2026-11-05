@@ -142,9 +142,9 @@ export function SwipeCard({
     <div className="swipe-stage">
       <motion.div
         className="swipe-enter"
-        initial={{ opacity: 0, y: 16 }}
+        initial={reduced ? false : { opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ type: "spring", visualDuration: 0.38, bounce: 0.18 }}
+        transition={reduced ? { duration: 0 } : { type: "spring", visualDuration: 0.3, bounce: 0 }}
       >
         <motion.section
           ref={cardRef}

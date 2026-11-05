@@ -35,7 +35,7 @@ Validation covers mesh buffers, names and concept membership, nonoverlapping exp
 
 ## Anatomy data
 
-The skeleton, muscles, and joints come from [Z-Anatomy](https://github.com/Z-Anatomy/Models-of-human-anatomy), one adult male model, so those layers meet. Z-Anatomy adapts BodyParts3D and distributes that work under **CC BY-SA 2.1 Japan**. Organs, vessels, and nerves remain **BodyParts3D 4.0**, licensed **CC BY 4.0**. Sharing the combined atlas must satisfy both licences. It does not represent every human structure or variation. Individual source meshes are distinct from named concepts, which may group multiple meshes.
+The skeleton, muscles, and joints come from [Z-Anatomy](https://github.com/Z-Anatomy/Models-of-human-anatomy), one adult male model, so those layers meet. Z-Anatomy distributes its content under **CC BY-SA 4.0**. Organs, vessels, and nerves remain **BodyParts3D 4.0**, licensed **CC BY 4.0**. Sharing the combined atlas must satisfy both licences. It does not represent every human structure or variation. Individual source meshes are distinct from named concepts, which may group multiple meshes.
 
 The packaged model contains 4,472,926 triangles and downloads approximately 55 MB of compressed geometry. Full credits, source links, and adaptation details are in [ATTRIBUTION.md](public/ATTRIBUTION.md).
 
@@ -78,6 +78,6 @@ Import this repository into Vercel as a Vite project. The included `vercel.json`
 
 ## License
 
-Original application code is released under the [MIT License](LICENSE). **The anatomy data has its own CC BY 4.0 license**; preserve the attribution when redistributing it. Third-party dependencies retain their respective licenses.
+Original application code is released under the [MIT License](LICENSE). The anatomy data has separate licences: the remaining BodyParts3D data is **CC BY 4.0**, while the Z-Anatomy-derived skeleton, muscles, and joints are **CC BY-SA 4.0**. Preserve the required attributions and distribute adaptations of the Z-Anatomy-derived data under CC BY-SA 4.0. Third-party dependencies retain their respective licenses.
 
 Issues and pull requests are welcome. Please include reproduction steps and browser/device details for interaction problems.

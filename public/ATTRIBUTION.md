@@ -17,13 +17,13 @@ Bones, skeletal muscles, and the joint meshes (capsules, ligaments, discs, menis
 
 - Model: https://github.com/Z-Anatomy/Models-of-human-anatomy
 - Project: https://www.z-anatomy.com/
-- The blend's own licence text attributes the base to "BodyParts3D, © The Database Center for Life Science licensed under CC Attribution-Share Alike 2.1 Japan", mixed and modified by Z-Anatomy, and requires derivative works to stay under that licence.
+- Z-Anatomy distributes its code and content under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). Its required model attribution is: “BodyParts3D - The Database Center for Life Science - CC-BY-SA 2.1 Japan” and “Z-Anatomy - The libre 3D atlas of anatomy - CC-BY-SA 4.0”.
 
 These three layers are exported together from that file, with the same axis change (Z-up meters to Y-up meters) and the same 8.4 mm / 10.5 mm translation, and they are not warped afterward. They meet because they were modeled on one skeleton. Origin and insertion markers are omitted. The organs, vessels, and nerves are still the BodyParts3D meshes and can sit about 1–2 cm off this skeleton, because Z-Anatomy repaired the bones.
 
-Sharing the combined atlas must attribute both sources and keep the Z-Anatomy skeleton, muscles, and joints under the share-alike terms above. The application code remains MIT.
+Adaptations of the Z-Anatomy-derived skeleton, muscle, and joint data—including the browser geometry chunks and rendered images made from them—are distributed under CC BY-SA 4.0. They must retain the required Z-Anatomy and BodyParts3D credits, link to CC BY-SA 4.0, and state these adaptations. The remaining BodyParts3D meshes are CC BY 4.0 and require the BodyParts3D credit above. The application source code remains MIT; it is separate from the model data.
 
-Source OBJ comments mention an older CC BY-SA 2.1 Japan license. The official current database license linked above supersedes that legacy text and explicitly permits redistribution and adaptation under CC BY 4.0.
+Some source OBJ comments mention the older CC BY-SA 2.1 Japan BodyParts3D licence. The official current BodyParts3D database licence linked above is CC BY 4.0. This does not replace the separate CC BY-SA 4.0 terms that Z-Anatomy applies to its adaptations.
 
 BodyParts3D represents an adult male reference anatomy based on TARO MRI and anatomical illustration refinements. It is not a complete model of every possible human anatomical structure or variation. This interface is educational and is not a clinical tool.
 

@@ -760,7 +760,7 @@ export default function Home() {
               {progress}% · Loading {atlas?.parts.length.toLocaleString() ?? "2,815"} pieces
             </span>
             <div className="loading-track">
-              <i style={{ width: `${progress}%` }} />
+              <i style={{ transform: `scaleX(${progress / 100})` }} />
             </div>
           </div>
         </div>
@@ -909,8 +909,9 @@ export default function Home() {
             <p>
               BodyParts3D, © The Database Center for Life Science licensed under CC Attribution 4.0
               International, supplies the organs, vessels, and nerves. The skeleton, muscles, and
-              joints are from Z-Anatomy, which adapts BodyParts3D and distributes that work under CC
-              BY-SA 2.1 Japan. Both attributions apply when you share the combined atlas.
+              joints are from Z-Anatomy, which distributes its work under CC BY-SA 4.0. Both
+              attributions apply when you share the combined atlas; Z-Anatomy-derived geometry
+              adaptations must remain under CC BY-SA 4.0.
             </p>
             <a
               href="https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html"
