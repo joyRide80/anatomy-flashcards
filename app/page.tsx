@@ -1,6 +1,8 @@
 import { flushSync } from "react-dom";
 import { registerAtlasTools } from "./agent-tools";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { preferredLatinByPart } from "@/lib/flashcards/catalog";
+import type { Catalog } from "@/lib/flashcards/types";
 import {
   Activity,
   ArrowUpRight,
@@ -82,6 +84,8 @@ export default function Home() {
     [details, setDetails] = useState(false),
     [studyExplore, setStudyExplore] = useState(false),
     [studyLatin, setStudyLatin] = useState(""),
+    [studyPart, setStudyPart] = useState<string | null>(null),
+    [latinByPart, setLatinByPart] = useState<Map<string, string>>(() => new Map()),
     [about, setAbout] = useState(false),
     [lighting, setLighting] = useState(DEFAULT_LIGHTING),
     [lightOpen, setLightOpen] = useState(false),
@@ -119,6 +123,7 @@ export default function Home() {
       const studyFrame = [...new Set([...frame, ...context])];
       setStudyExplore(fromStudy);
       setStudyLatin(fromStudy ? latin : "");
+      setStudyPart(null);
       setChosen({
         id: first.conceptId,
         name: params.get("name") ?? first.name,
@@ -153,14 +158,23 @@ export default function Home() {
     setDetails(false);
     setStudyExplore(false);
     setStudyLatin("");
+    setStudyPart(null);
     setState({ ...initial, visible: DEFAULT_VISIBLE });
+    fetch("/cards/catalog.json", { signal: abort.signal })
+      .then((r) => {
+        if (!r.ok) throw new Error("The flashcard catalogue could not be loaded.");
+        return r.json() as Promise<Catalog>;
+      })
+      .then((catalog) => setLatinByPart(preferredLatinByPart(catalog)))
+      .catch((e) => {
+        if (e.name !== "AbortError") console.warn(e.message);
+      });
     fetch("/models/atlas.json", { signal: abort.signal })
       .then((r) => {
         if (!r.ok) throw new Error("The anatomy catalogue could not be loaded.");
-        return r.json();
+        return r.json() as Promise<Atlas>;
       })
-      .then((json: unknown) => {
-        const data = json as Atlas;
+      .then((data) => {
         loadedAtlas = data;
         setAtlas(data);
         openStudyTarget(location.search);
@@ -173,6 +187,10 @@ export default function Home() {
       window.removeEventListener("message", studyTarget);
     };
   }, []);
+  useEffect(() => {
+    if (!studyExplore || !studyPart) return;
+    setStudyLatin(latinByPart.get(studyPart) ?? "");
+  }, [studyExplore, studyPart, latinByPart]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape" && studyExplore && window.parent !== window) {
@@ -273,6 +291,11 @@ export default function Home() {
     // Name the tapped part and move the selection highlight onto it.
     // The framed view stays put; the previous subject remains visible beside it.
     if (studyExplore) {
+      // A learner may inspect surrounding anatomy without changing the
+      // flashcard's answer. The caption, however, must describe the mesh now
+      // under study rather than retain the original card's Latin term.
+      setStudyPart(id);
+      setStudyLatin(latinByPart.get(id) ?? "");
       setChosen((current) =>
         current ? { ...current, name: p.name } : { id: p.conceptId, name: p.name, elements: [id] },
       );
@@ -316,6 +339,7 @@ export default function Home() {
     setChosen(null);
     setDetails(false);
     setStudyExplore(false);
+    setStudyPart(null);
     setPanel(null);
   };
   const removePart = (id: string) => {
@@ -696,7 +720,10 @@ export default function Home() {
       </nav>
       <div className="scene-caption">
         <span className="caption-line" />
-        <span className={studyExplore && studyLatin ? "study-caption-labels" : undefined}>
+        <span
+          className={studyExplore && studyLatin ? "study-caption-labels" : undefined}
+          aria-live={studyExplore ? "polite" : undefined}
+        >
           {studyExplore && studyLatin && <span className="study-caption-latin">{studyLatin}</span>}
           <span>
             {state.removed.length

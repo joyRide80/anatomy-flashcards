@@ -5,6 +5,7 @@ import {
   normalizeLatin,
   parseUpload,
 } from "../lib/flashcards/latin.ts";
+import { preferredLatinByPart } from "../lib/flashcards/catalog.ts";
 import { introduce, schedule, pickNext, LEARNING_STEPS } from "../lib/srs.ts";
 
 const atlas = JSON.parse(
@@ -60,6 +61,9 @@ assert.equal(
 );
 assert.equal(normalizeLatin("Costa 1"), "costa i");
 const index = buildLatinIndex(catalog);
+const latinByPart = preferredLatinByPart(catalog);
+assert.equal(latinByPart.get("FJ3413"), "pars ascendens aortae");
+assert.equal(latinByPart.get("FJ3411"), "arcus aortae");
 const expect = (term, status, id) => {
   const r = index.match(term);
   assert.equal(r.status, status, `${term}: ${r.status}`);

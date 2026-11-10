@@ -11,7 +11,7 @@ const catalog = JSON.parse(
   await readFile(new URL("../public/cards/catalog.json", import.meta.url)),
 );
 const decks = curatedDecks(catalog);
-assert.equal(decks.length, 18);
+assert.equal(decks.length, 23);
 assert.equal(new Set(decks.map((d) => d.id)).size, decks.length);
 const catalogueIds = new Set(catalog.structures.map((s) => s.id));
 for (const deck of decks) {
@@ -38,6 +38,16 @@ assert.ok(
     .find((d) => d.id === "all-bones")
     .items.some((i) => i.structureId === "humerus"),
 );
+for (const id of [
+  "arteries-aortic-pathway",
+  "arteries-head-neck",
+  "arteries-upper-limb",
+  "arteries-pelvis-lower-limb",
+])
+  assert.ok(
+    decks.find((d) => d.id === id)?.items.length,
+    `${id} must contain cards`,
+  );
 
 const now = new Date(2026, 9, 30, 12).getTime();
 const event = (id, action, at, deckId = "bones-upper-limb") => ({

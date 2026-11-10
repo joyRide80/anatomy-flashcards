@@ -377,6 +377,66 @@ const DEFINITIONS: Definition[] = [
       "dorsalis-pedis-artery",
     ],
   },
+  {
+    id: "arteries-aortic-pathway",
+    name: "Aortic pathway",
+    category: "artery",
+    region: "Trunk",
+    description:
+      "Follow the aorta from its ascending portion through the thorax and abdomen.",
+    ids: [
+      "ascending-aorta",
+      "arch-of-aorta",
+      "descending-thoracic-aorta",
+      "abdominal-aorta",
+    ],
+  },
+  {
+    id: "arteries-head-neck",
+    name: "Head & neck arteries",
+    category: "artery",
+    region: "Head & neck",
+    description:
+      "Learn the brachiocephalic trunk and the major carotid route toward the head.",
+    ids: [
+      "brachiocephalic-artery",
+      "common-carotid-artery",
+      "internal-carotid-artery",
+    ],
+  },
+  {
+    id: "arteries-upper-limb",
+    name: "Upper limb arteries",
+    category: "artery",
+    region: "Upper limb",
+    description:
+      "Trace the principal arterial route from the subclavian artery to the forearm.",
+    ids: [
+      "subclavian-artery",
+      "axillary-artery",
+      "brachial-artery",
+      "radial-artery",
+      "ulnar-artery",
+    ],
+  },
+  {
+    id: "arteries-pelvis-lower-limb",
+    name: "Pelvis & lower limb arteries",
+    category: "artery",
+    region: "Lower limb",
+    description:
+      "Follow the major iliac, thigh, leg, and foot arteries from pelvis to dorsum of foot.",
+    ids: [
+      "common-iliac-artery",
+      "internal-iliac-artery",
+      "external-iliac-artery",
+      "femoral-artery",
+      "popliteal-artery",
+      "anterior-tibial-artery",
+      "posterior-tibial-artery",
+      "dorsalis-pedis-artery",
+    ],
+  },
 ];
 
 export function curatedDecks(catalog: Catalog): CuratedDeck[] {

@@ -33,11 +33,11 @@ const deck = (name) =>
 try {
   await page.goto(base);
   await page.getByRole("heading", { name: "Pick a deck. Learn the body." }).waitFor();
-  assert.equal(await page.locator(".catalog-card").count(), 16);
+  assert.equal(await page.locator(".catalog-card").count(), 23);
   assert.equal(await page.getByText("New deck from your Latin list", { exact: true }).count(), 0);
   await page.screenshot({ path: new URL("desktop.png", output).pathname, fullPage: true });
   await page.getByRole("searchbox", { name: "Search decks" }).fill("upper limb");
-  assert.equal(await page.locator(".catalog-card").count(), 4);
+  assert.equal(await page.locator(".catalog-card").count(), 5);
   await deck("Upper limb bones").getByRole("button", { name: "Preview cards" }).click();
   assert.equal(await deck("Upper limb bones").locator(".deck-preview li").count(), 5);
   await page
