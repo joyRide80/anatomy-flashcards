@@ -57,6 +57,7 @@ export function CreateDeck({
       muscle: [],
       ligament: [],
       joint: [],
+      artery: [],
     };
     for (const s of catalog.structures) out[s.category].push(s);
     for (const list of Object.values(out))

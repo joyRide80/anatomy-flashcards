@@ -1,4 +1,4 @@
-export type Category = "bone" | "muscle" | "ligament" | "joint";
+export type Category = "bone" | "muscle" | "ligament" | "joint" | "artery";
 
 /** A card subject: one structure (left/right meshes merged) or a composite such as a whole muscle. */
 export interface Structure {

@@ -346,6 +346,37 @@ const DEFINITIONS: Definition[] = [
     description:
       "Capsules, discs, menisci, and labra. Ligaments and membranes have their own deck.",
   },
+  {
+    id: "major-arteries",
+    name: "Major arteries",
+    category: "artery",
+    region: "Whole body",
+    featured: true,
+    description:
+      "Trace the major systemic arteries from the aorta through the head, limbs, and feet.",
+    ids: [
+      "ascending-aorta",
+      "arch-of-aorta",
+      "descending-thoracic-aorta",
+      "abdominal-aorta",
+      "brachiocephalic-artery",
+      "common-carotid-artery",
+      "internal-carotid-artery",
+      "subclavian-artery",
+      "axillary-artery",
+      "brachial-artery",
+      "radial-artery",
+      "ulnar-artery",
+      "common-iliac-artery",
+      "internal-iliac-artery",
+      "external-iliac-artery",
+      "femoral-artery",
+      "popliteal-artery",
+      "anterior-tibial-artery",
+      "posterior-tibial-artery",
+      "dorsalis-pedis-artery",
+    ],
+  },
 ];
 
 export function curatedDecks(catalog: Catalog): CuratedDeck[] {

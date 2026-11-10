@@ -177,9 +177,9 @@ export function t(language: StudyLanguage, key: string) {
 }
 
 const categories: Record<StudyLanguage, Record<Category, string>> = {
-  en: { bone: "Bone", muscle: "Muscle", ligament: "Ligament", joint: "Joint" },
-  nb: { bone: "Knokkel", muscle: "Muskel", ligament: "Leddbånd", joint: "Ledd" },
-  da: { bone: "Knogel", muscle: "Muskel", ligament: "Ledbånd", joint: "Led" },
+  en: { bone: "Bone", muscle: "Muscle", ligament: "Ligament", joint: "Joint", artery: "Artery" },
+  nb: { bone: "Knokkel", muscle: "Muskel", ligament: "Leddbånd", joint: "Ledd", artery: "Arterie" },
+  da: { bone: "Knogel", muscle: "Muskel", ligament: "Ledbånd", joint: "Led", artery: "Arterie" },
 };
 
 export function categoryLabel(language: StudyLanguage, category: Category) {

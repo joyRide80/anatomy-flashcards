@@ -24,9 +24,35 @@ const MUSCLE_OUTSIDE_MUSCULAR =
   /^(fibularis|tibialis|subscapularis|levator scapulae|tensor fasciae latae)/i;
 const LIGAMENT = /ligament|interosseous membrane|thyrohyoid membrane/i;
 const JOINT_STRUCTURE = /capsule|meniscus|\bdisc\b|labrum|symphysis/i;
+// A deliberately compact first vascular deck. These are the principal systemic
+// arteries learners encounter when orienting themselves through the body.
+const MAJOR_ARTERIES = new Set([
+  "ascending aorta",
+  "arch of aorta",
+  "descending thoracic aorta",
+  "abdominal aorta",
+  "brachiocephalic artery",
+  "common carotid artery",
+  "internal carotid artery",
+  "subclavian artery",
+  "axillary artery",
+  "brachial artery",
+  "radial artery",
+  "ulnar artery",
+  "common iliac artery",
+  "internal iliac artery",
+  "external iliac artery",
+  "femoral artery",
+  "popliteal artery",
+  "anterior tibial artery",
+  "posterior tibial artery",
+  "dorsalis pedis artery",
+]);
 
 function category(part, base) {
   if (EXCLUDE.test(part.name) || EXCLUDE.test(base)) return null;
+  if (part.system === "arterial")
+    return MAJOR_ARTERIES.has(base) ? "artery" : null;
   if (part.system === "joints") {
     if (JOINT_STRUCTURE.test(part.name)) return "joint";
     if (/ligament|membrane|oblique cord/i.test(part.name)) return "ligament";
@@ -274,6 +300,7 @@ const FMA_ALIAS = {
   "plantar interphalangeal ligaments": "FMA71427",
 };
 const LATIN_ALIAS = {
+  "descending thoracic aorta": ["aorta thoracica"],
   "anterior belly of digastric": part("venter anterior", "m. digastricus"),
   "posterior belly of digastric": part("venter posterior", "m. digastricus"),
   "deep head of flexor pollicis brevis": part(

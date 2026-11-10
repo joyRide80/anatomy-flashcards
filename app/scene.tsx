@@ -803,6 +803,9 @@ export default function AnatomyScene({
               w,
               h,
             );
+            const arterialStudy = s.selected.some(
+              (id) => atlas.parts.find((part) => part.id === id)?.system === "arterial",
+            );
             const distance = Math.max(
               0.07,
               (Math.max(
@@ -813,7 +816,7 @@ export default function AnatomyScene({
                 (2 * Math.tan(T.MathUtils.degToRad(camera.fov / 2)))) *
                 // Study views retain a little more of the surrounding region,
                 // so the focused structure reads in anatomical context.
-                (s.context?.length ? 1.7 : 1.35),
+                (s.context?.length ? (arterialStudy ? 2.35 : 1.7) : 1.35),
             );
             controls.maxDistance = Math.max(40, distance * 2);
             controls.target.copy(center);

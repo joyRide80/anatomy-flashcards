@@ -21,7 +21,7 @@ for (const s of catalog.structures) {
   assert.ok(!ids.has(s.id), `Duplicate structure ${s.id}`);
   ids.add(s.id);
   assert.ok(
-    ["bone", "muscle", "ligament", "joint"].includes(s.category),
+    ["bone", "muscle", "ligament", "joint", "artery"].includes(s.category),
     `${s.id} category`,
   );
   assert.ok(

@@ -11,6 +11,7 @@ export const CATEGORY_LABEL: Record<Category, string> = {
   muscle: "Muscle",
   ligament: "Ligament",
   joint: "Joint",
+  artery: "Artery",
 };
 
 /** Preferred Latin term without TA's bracketed numbering, e.g. "atlas [C I]" → "atlas". */

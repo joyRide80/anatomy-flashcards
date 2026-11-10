@@ -1302,7 +1302,7 @@ body:has(.explorer-overlay) .study:not(.explorer-overlay) {
 }
 .prompt {
   margin: 0;
-  font: 500 38px/1.12 var(--sans);
+  font: 400 38px/1.12 var(--sans);
 }
 .latin {
   margin: 0;
@@ -2017,7 +2017,7 @@ body:has(.explorer-overlay) .study:not(.explorer-overlay) {
   min-height: 0;
   margin: 0;
   color: var(--ink);
-  font: 600 clamp(1.55rem, 2.1vw, 1.9rem) / 1.08 var(--mono);
+  font: 500 clamp(1.55rem, 2.1vw, 1.9rem) / 1.08 var(--mono);
   letter-spacing: 0.01em;
   text-wrap: balance;
 }

@@ -143,7 +143,7 @@ export function Library({
           role="group"
           aria-label={t(language, "anatomyCategories")}
         >
-          {(["all", "bone", "muscle", "ligament", "joint"] as const).map((value) => (
+          {(["all", "bone", "muscle", "ligament", "joint", "artery"] as const).map((value) => (
             <button
               key={value}
               aria-pressed={category === value}

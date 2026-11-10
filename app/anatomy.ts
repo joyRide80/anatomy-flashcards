@@ -328,5 +328,43 @@ export function studyContext(
   for (const cluster of clusters)
     for (const id of neighborhood(atlas, cluster))
       if (!own.has(id)) ids.add(id);
+
+  // Vessels are difficult to identify as isolated tubes. Keep the local bony
+  // landmark layer, then add the closest organ pieces so the learner can read
+  // a vessel's place in the chest, abdomen, or limb before rotating the model.
+  const selectedParts = atlas.parts.filter((part) => own.has(part.id));
+  if (selectedParts.some((part) => part.system === "arterial")) {
+    const center = [0, 0, 0];
+    for (const part of selectedParts)
+      for (let axis = 0; axis < 3; axis++)
+        center[axis] += (part.bounds[0][axis] + part.bounds[1][axis]) / 2;
+    for (let axis = 0; axis < 3; axis++) center[axis] /= selectedParts.length;
+
+    const distance = (part: Part) => {
+      const point = part.bounds[0].map(
+        (value, axis) => (value + part.bounds[1][axis]) / 2,
+      );
+      return Math.hypot(...point.map((value, axis) => value - center[axis]));
+    };
+    const limits: Partial<Record<SystemId, number>> = {
+      cardiac: 24,
+      respiratory: 14,
+      digestive: 8,
+      urinary: 4,
+    };
+    for (const [system, limit] of Object.entries(limits) as [
+      SystemId,
+      number,
+    ][]) {
+      atlas.parts
+        .filter(
+          (part) =>
+            part.system === system && !own.has(part.id) && distance(part) <= 0.18,
+        )
+        .sort((a, b) => distance(a) - distance(b))
+        .slice(0, limit)
+        .forEach((part) => ids.add(part.id));
+    }
+  }
   return [...ids];
 }
