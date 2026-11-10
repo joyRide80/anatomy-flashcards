@@ -27,6 +27,9 @@ const REGIONAL_CONTEXT_FRAME_IDS = new Set([
   "intermediate-cuneiform-bone",
   "proximal-phalanx-of-second-toe",
 ]);
+// The vomer sits deep within the nasal septum. Render its surrounding skull as
+// a light cutaway so learners can orient it without losing the highlight.
+const CUTAWAY_CARD_IDS = new Set(["vomer"]);
 
 interface ViewDirection {
   /** Name of this camera direction. */
@@ -199,6 +202,16 @@ async function load(host: HTMLElement, api: CardRendererApi) {
       envMapIntensity: DEFAULT_LIGHTING.environment,
       side,
     }),
+    boneGhost: new T.MeshStandardMaterial({
+      color: BONE,
+      roughness: 0.72,
+      metalness: 0.02,
+      envMapIntensity: DEFAULT_LIGHTING.environment,
+      transparent: true,
+      opacity: 0.16,
+      depthWrite: false,
+      side,
+    }),
     // Ghosted muscles draw in two passes so only their nearest surface is shaded,
     // giving one veil instead of many stacked translucent layers.
     ghostDepth: new T.MeshBasicMaterial({ colorWrite: false, side }),
@@ -288,7 +301,12 @@ async function load(host: HTMLElement, api: CardRendererApi) {
   const regionalFrame = (bounds: T.Box3) => bounds.clone().expandByScalar(0.04);
 
   /** Output framing leaves a wide margin for neighboring anatomy. `score` frames every direction alike so their scores compare fairly. */
-  function frame(bounds: T.Box3, v: ViewDirection, score = false) {
+  function frame(
+    bounds: T.Box3,
+    v: ViewDirection,
+    score = false,
+    margin = 4,
+  ) {
     const center = bounds.getCenter(new T.Vector3());
     const right = new T.Vector3().crossVectors(v.up, v.dir).normalize();
     const up = new T.Vector3().crossVectors(v.dir, right).normalize();
@@ -305,7 +323,7 @@ async function load(host: HTMLElement, api: CardRendererApi) {
     }
     const extent = score
       ? bounds.getSize(new T.Vector3()).length()
-      : Math.max(w, h) * 4;
+      : Math.max(w, h) * margin;
     const size = Math.max(0.12, extent);
     const distance = size / 2 / Math.tan(T.MathUtils.degToRad(camera.fov / 2));
     camera.position.copy(center).addScaledVector(v.dir, distance);
@@ -372,13 +390,15 @@ async function load(host: HTMLElement, api: CardRendererApi) {
     const targets = s.parts.map((p) => meshes.get(p)!).filter(Boolean);
     const targetSet = new Set(targets);
     const { bones, muscles } = context(s, framed, one);
+    const cutaway = CUTAWAY_CARD_IDS.has(s.id);
+    const frameMargin = cutaway ? 1.8 : 4;
     const idMaterial = (m: T.Mesh) =>
       targetSet.has(m) ? material.idTarget : material.idOccluder;
 
     // Score each direction by how much of the structure is visible, both behind
     // the ghosted muscles and with them treated as opaque.
     const scored = VIEWS.map((v) => {
-      frame(framed, v, true);
+      frame(framed, v, true, frameMargin);
       show([...targets, ...bones, ...muscles], idMaterial);
       const unobstructed = visiblePixels();
       show([...targets, ...bones], idMaterial);
@@ -402,11 +422,13 @@ async function load(host: HTMLElement, api: CardRendererApi) {
     const marked = s.category === "muscle" ? material.highlight : material.mark;
     const out: RenderedView[] = [];
     for (const { v } of chosen) {
-      frame(framed, v);
+      frame(framed, v, false, frameMargin);
       show([...targets, ...bones, ...muscles], (m) => {
         m.renderOrder = ghosts.has(m) ? 1 : 0;
         return targetSet.has(m)
           ? marked
+          : cutaway
+            ? material.boneGhost
           : ghosts.has(m)
             ? material.ghostDepth
             : material.bone;

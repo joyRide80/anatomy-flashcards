@@ -811,7 +811,9 @@ export default function AnatomyScene({
                 size.z,
               ) /
                 (2 * Math.tan(T.MathUtils.degToRad(camera.fov / 2)))) *
-                (s.context?.length ? 1.55 : 1.35),
+                // Study views retain a little more of the surrounding region,
+                // so the focused structure reads in anatomical context.
+                (s.context?.length ? 1.7 : 1.35),
             );
             controls.maxDistance = Math.max(40, distance * 2);
             controls.target.copy(center);

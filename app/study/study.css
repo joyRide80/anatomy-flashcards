@@ -965,7 +965,9 @@ body:has(.deck-menu) .study {
 }
 .session-game {
   margin: 1px 0 0;
-  font: italic 500 16px/1.2 var(--serif);
+  font: 600 0.75rem/1.2 var(--sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--vermilion);
   text-align: center;
 }
@@ -1300,7 +1302,7 @@ body:has(.explorer-overlay) .study:not(.explorer-overlay) {
 }
 .prompt {
   margin: 0;
-  font: 500 38px/1.12 var(--serif);
+  font: 500 38px/1.12 var(--sans);
 }
 .latin {
   margin: 0;
@@ -1442,6 +1444,7 @@ body:has(.explorer-overlay) .study:not(.explorer-overlay) {
 }
 .choice kbd {
   flex: none;
+  display: none;
 }
 .study .choice.is-correct,
 .study .choice.is-correct:hover {
@@ -1831,7 +1834,6 @@ body:has(.explorer-overlay) .study:not(.explorer-overlay) {
 .study .link,
 .category-filters button,
 .session-bar h2,
-.prompt,
 .latin,
 .official,
 .choice-label,
@@ -2204,6 +2206,15 @@ body:has(.explorer-overlay) .study:not(.explorer-overlay) {
 .choice-key {
   font-size: 0.75rem;
 }
+
+/* Keep study navigation and card actions in the reading face; anatomical names
+   retain their distinct mono treatment. */
+.session .session-bar h2,
+.study .plate-views button,
+.study .plate-explore {
+  font-family: var(--sans);
+}
+
 @media (max-width: 640px) {
   .study .link,
   .study .back,
@@ -2213,5 +2224,8 @@ body:has(.explorer-overlay) .study:not(.explorer-overlay) {
   .plate-explore,
   .choice-key {
     font-size: 0.875rem;
+  }
+  .choice kbd {
+    display: inline-flex;
   }
 }

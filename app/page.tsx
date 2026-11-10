@@ -116,7 +116,13 @@ export default function Home() {
                 .get("focus")
                 ?.split(",")
                 .filter((id) => ids.includes(id)) ?? [],
-            frame = focus.length ? focus : ids;
+            frame = focus.length ? focus : ids,
+            context = studyContext(data, ids, frame),
+            // Frame the study view around the selected structure *and* its
+            // immediate anatomy. Previously the camera fitted only the card's
+            // target, so the surrounding pieces appeared abruptly cropped at
+            // the edge of the viewport.
+            studyFrame = [...new Set([...frame, ...context])];
           setStudyExplore(fromStudy);
           setChosen({
             id: first.conceptId,
@@ -127,8 +133,8 @@ export default function Home() {
             ...s,
             selected: ids,
             isolate: true,
-            context: studyContext(data, ids, frame),
-            frame,
+            context,
+            frame: studyFrame,
           }));
           setDetails(fromStudy ? false : true);
         }
