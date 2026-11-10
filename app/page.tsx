@@ -81,6 +81,7 @@ export default function Home() {
     [panel, setPanel] = useState<"layers" | "search" | null>(null),
     [details, setDetails] = useState(false),
     [studyExplore, setStudyExplore] = useState(false),
+    [studyLatin, setStudyLatin] = useState(""),
     [about, setAbout] = useState(false),
     [lighting, setLighting] = useState(DEFAULT_LIGHTING),
     [lightOpen, setLightOpen] = useState(false),
@@ -88,12 +89,70 @@ export default function Home() {
     [chosen, setChosen] = useState<Concept | null>(null);
   useEffect(() => {
     const abort = new AbortController();
+    let loadedAtlas: Atlas | null = null;
+    const openStudyTarget = (search: string) => {
+      if (!loadedAtlas) return;
+      const data = loadedAtlas;
+      const params = new URLSearchParams(search),
+        ids = params
+          .get("parts")
+          ?.split(",")
+          .filter((id) => data.parts.some((p) => p.id === id));
+      if (!ids?.length) return;
+      const fromStudy = params.get("study") === "1";
+      const latin = params.get("latin")?.replace(/\s*\[[^\]]*\]/g, "").trim() ?? "";
+      const requestedView = params.get("view");
+      const cardView: View | undefined =
+        requestedView === "front" || requestedView === "back"
+          ? requestedView
+          : undefined;
+      const first = data.parts.find((p) => p.id === ids[0])!;
+      const focus =
+        params
+          .get("focus")
+          ?.split(",")
+          .filter((id) => ids.includes(id)) ?? [];
+      const frame = focus.length ? focus : ids;
+      const context = studyContext(data, ids, frame);
+      // Frame the study view around the selected structure *and* its immediate
+      // anatomy, so the target does not appear abruptly cropped at the edge.
+      const studyFrame = [...new Set([...frame, ...context])];
+      setStudyExplore(fromStudy);
+      setStudyLatin(fromStudy ? latin : "");
+      setChosen({
+        id: first.conceptId,
+        name: params.get("name") ?? first.name,
+        elements: ids,
+      });
+      setState((s) => ({
+        ...s,
+        selected: ids,
+        isolate: true,
+        context,
+        frame: studyFrame,
+        view: cardView ?? s.view,
+        // The explorer iframe is retained between cards. Incrementing reset
+        // ensures its camera never inherits a prior card's mobile zoom.
+        reset: s.reset + 1,
+      }));
+      setDetails(fromStudy ? false : true);
+    };
+    const studyTarget = (event: MessageEvent) => {
+      if (event.origin !== location.origin) return;
+      if (
+        event.data?.type === "human-atlas:study-target" &&
+        typeof event.data.search === "string"
+      )
+        openStudyTarget(event.data.search);
+    };
+    window.addEventListener("message", studyTarget);
     setProgress(0);
     setError("");
     setAtlas(null);
     setChosen(null);
     setDetails(false);
     setStudyExplore(false);
+    setStudyLatin("");
     setState({ ...initial, visible: DEFAULT_VISIBLE });
     fetch("/models/atlas.json", { signal: abort.signal })
       .then((r) => {
@@ -102,47 +161,17 @@ export default function Home() {
       })
       .then((json: unknown) => {
         const data = json as Atlas;
+        loadedAtlas = data;
         setAtlas(data);
-        const params = new URLSearchParams(location.search),
-          ids = params
-            .get("parts")
-            ?.split(",")
-            .filter((id) => data.parts.some((p) => p.id === id));
-        if (ids?.length) {
-          const fromStudy = params.get("study") === "1";
-          const first = data.parts.find((p) => p.id === ids[0])!,
-            focus =
-              params
-                .get("focus")
-                ?.split(",")
-                .filter((id) => ids.includes(id)) ?? [],
-            frame = focus.length ? focus : ids,
-            context = studyContext(data, ids, frame),
-            // Frame the study view around the selected structure *and* its
-            // immediate anatomy. Previously the camera fitted only the card's
-            // target, so the surrounding pieces appeared abruptly cropped at
-            // the edge of the viewport.
-            studyFrame = [...new Set([...frame, ...context])];
-          setStudyExplore(fromStudy);
-          setChosen({
-            id: first.conceptId,
-            name: params.get("name") ?? first.name,
-            elements: ids,
-          });
-          setState((s) => ({
-            ...s,
-            selected: ids,
-            isolate: true,
-            context,
-            frame: studyFrame,
-          }));
-          setDetails(fromStudy ? false : true);
-        }
+        openStudyTarget(location.search);
       })
       .catch((e) => {
         if (e.name !== "AbortError") setError(e.message);
       });
-    return () => abort.abort();
+    return () => {
+      abort.abort();
+      window.removeEventListener("message", studyTarget);
+    };
   }, []);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -667,18 +696,21 @@ export default function Home() {
       </nav>
       <div className="scene-caption">
         <span className="caption-line" />
-        <span>
-          {state.removed.length
-            ? `${state.removed.length} REMOVED`
-            : state.knife
-              ? "KNIFE"
-              : state.isolate
-                ? (chosen?.name ?? "SELECTED STRUCTURE")
-                : state.explode > 0.95
-                  ? "ANATOMICAL INVENTORY"
-                  : state.explode > 0.05
-                    ? "SEPARATED STRUCTURES"
-                    : "ADULT HUMAN · MALE"}
+        <span className={studyExplore && studyLatin ? "study-caption-labels" : undefined}>
+          {studyExplore && studyLatin && <span className="study-caption-latin">{studyLatin}</span>}
+          <span>
+            {state.removed.length
+              ? `${state.removed.length} REMOVED`
+              : state.knife
+                ? "KNIFE"
+                : state.isolate
+                  ? (chosen?.name ?? "SELECTED STRUCTURE")
+                  : state.explode > 0.95
+                    ? "ANATOMICAL INVENTORY"
+                    : state.explode > 0.05
+                      ? "SEPARATED STRUCTURES"
+                      : "ADULT HUMAN · MALE"}
+          </span>
         </span>
         <span className="caption-line" />
       </div>

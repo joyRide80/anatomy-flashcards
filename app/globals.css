@@ -2063,6 +2063,20 @@ h1 .edition {
 .studio.study-explore .caption-line {
   background: #1a242873;
 }
+.studio.study-explore .study-caption-labels {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  text-align: center;
+}
+.studio.study-explore .study-caption-latin {
+  color: #087b60;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72em;
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: 0.04em;
+}
 @media (max-width: 767px) {
   .studio.study-explore .scene-caption {
     bottom: max(16px, env(safe-area-inset-bottom));

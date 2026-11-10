@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import type { Catalog, Category, Structure } from "@/lib/flashcards/types";
@@ -26,31 +26,44 @@ export function catalogMaps(catalog: Catalog) {
 }
 
 /** Opens the 3D explorer on this structure, framed on the card's side, with nearby anatomy kept visible. */
-export function explorerHref(s: Structure) {
+export function explorerHref(s: Structure, imageView?: string) {
   const params = new URLSearchParams({
     parts: s.parts.join(","),
     name: s.en,
     study: "1",
   });
+  if (s.la[0]) params.set("latin", s.la[0].replace(/\s*\[[^\]]*\]/g, ""));
+  if (imageView === "anterior") params.set("view", "front");
+  if (imageView === "posterior") params.set("view", "back");
   if (s.focus.length) params.set("focus", s.focus.join(","));
   return `/atlas?${params}`;
 }
 
 export function ExplorerOverlay({
+  open,
   src,
   title,
   onClose,
 }: {
+  open: boolean;
   src: string;
   title: string;
   onClose: () => void;
 }) {
   const dialog = useRef<HTMLDivElement>(null);
+  const frame = useRef<HTMLIFrameElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const [frameSrc, setFrameSrc] = useState<string | null>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   useEffect(() => {
+    if (!open) return;
     const previous = document.activeElement;
-    dialog.current?.focus();
+    // A card may have been magnified on a small screen. Return the document to
+    // its origin and focus the exit affordance before handing off to the atlas.
+    window.scrollTo(0, 0);
+    dialog.current?.scrollTo(0, 0);
+    requestAnimationFrame(() => closeButton.current?.focus());
     const close = () => onCloseRef.current();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -69,12 +82,31 @@ export function ExplorerOverlay({
       window.removeEventListener("message", onMessage);
       if (previous instanceof HTMLElement) previous.focus();
     };
-  }, []);
+  }, [open]);
+
+  const sendTarget = () => {
+    frame.current?.contentWindow?.postMessage(
+      {
+        type: "human-atlas:study-target",
+        search: new URL(src, location.origin).search,
+      },
+      location.origin,
+    );
+  };
+  useEffect(() => {
+    if (!open) return;
+    if (!frameSrc) {
+      setFrameSrc(src);
+      return;
+    }
+    sendTarget();
+  }, [open, src, frameSrc]);
 
   return createPortal(
     <div
       ref={dialog}
       className="study explorer-overlay"
+      hidden={!open}
       role="dialog"
       aria-modal="true"
       aria-labelledby="explorer-overlay-title"
@@ -83,6 +115,7 @@ export function ExplorerOverlay({
       <div className="explorer-overlay-bar">
         <h2 id="explorer-overlay-title">{title}</h2>
         <button
+          ref={closeButton}
           type="button"
           className="deck-settings-button explorer-overlay-close"
           aria-label="Close 3D explorer"
@@ -91,7 +124,13 @@ export function ExplorerOverlay({
           <X size={18} />
         </button>
       </div>
-      <iframe className="explorer-frame" src={src} title={title} />
+      <iframe
+        ref={frame}
+        className="explorer-frame"
+        src={frameSrc ?? "about:blank"}
+        title={title}
+        onLoad={sendTarget}
+      />
     </div>,
     document.body,
   );

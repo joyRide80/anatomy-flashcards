@@ -1175,11 +1175,12 @@ body:has(.deck-menu) .study {
   flex-direction: column;
   height: 100dvh;
   overflow: hidden;
+  overscroll-behavior: none;
 }
-body:has(.explorer-overlay) {
+body:has(.explorer-overlay:not([hidden])) {
   overflow: hidden;
 }
-body:has(.explorer-overlay) .study:not(.explorer-overlay) {
+body:has(.explorer-overlay:not([hidden])) .study:not(.explorer-overlay) {
   overflow: hidden;
 }
 .explorer-overlay-bar {

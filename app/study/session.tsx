@@ -628,9 +628,13 @@ export function Session({
           </div>
         </SwipeCard>
       )}
-      {explore && structure && (
+      {structure && (
         <ExplorerOverlay
-          src={explorerHref(structure)}
+          open={explore}
+          src={explorerHref(
+            structure,
+            structure.images[view % Math.max(1, structure.images.length)]?.view,
+          )}
           title={structureName(structure, language)}
           onClose={() => setExplore(false)}
         />

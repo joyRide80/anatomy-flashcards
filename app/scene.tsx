@@ -873,11 +873,17 @@ export default function AnatomyScene({
             );
             controls.maxDistance = Math.max(40, distance * 2);
             controls.target.copy(center);
+            const direction =
+              s.view === "front"
+                ? new T.Vector3(0, 0.02, 1)
+                : s.view === "back"
+                  ? new T.Vector3(0, 0.02, -1)
+                  : s.view === "side"
+                    ? new T.Vector3(1, 0.02, 0)
+                    : new T.Vector3(0.2, 0.1, 1);
             camera.position
               .copy(center)
-              .add(
-                new T.Vector3(0.2, 0.1, 1).normalize().multiplyScalar(distance),
-              );
+              .add(direction.normalize().multiplyScalar(distance));
             controls.update();
             dirty = true;
           }
