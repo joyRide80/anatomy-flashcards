@@ -312,6 +312,66 @@ export function neighborhood(atlas: Atlas, ids: string[]): string[] {
   return [...bones, ...muscles.slice(0, 12).map((part) => part.id)];
 }
 
+/**
+ * A broader anatomical layer for study links. It keeps the focused structure
+ * inside its body region (rather than among only the meshes it touches), while
+ * remaining local enough that the highlighted part still reads at a glance.
+ */
+function regionalSystemContext(
+  atlas: Atlas,
+  ids: string[],
+  includeArteries = false,
+): string[] {
+  const own = new Set(ids);
+  const selected = atlas.parts.filter((part) => own.has(part.id));
+  if (!selected.length) return [];
+  const min = [Infinity, Infinity, Infinity];
+  const max = [-Infinity, -Infinity, -Infinity];
+  let longest = 0;
+  for (const part of selected) {
+    for (let axis = 0; axis < 3; axis++) {
+      min[axis] = Math.min(min[axis], part.bounds[0][axis]);
+      max[axis] = Math.max(max[axis], part.bounds[1][axis]);
+      longest = Math.max(longest, part.bounds[1][axis] - part.bounds[0][axis]);
+    }
+  }
+  // This gives small, deep structures a whole-head context and limb structures
+  // a useful regional frame without zooming out to the complete body.
+  const padding = Math.min(0.45, Math.max(0.35, longest * 2.5));
+  const low = min.map((value) => value - padding);
+  const high = max.map((value) => value + padding);
+  const center = min.map((value, axis) => (value + max[axis]) / 2);
+  const midpoint = (part: Part) =>
+    part.bounds[0].map((value, axis) => (value + part.bounds[1][axis]) / 2) as [
+      number,
+      number,
+      number,
+    ];
+  const nearby = (part: Part) =>
+    midpoint(part).every(
+      (value, axis) => value >= low[axis] && value <= high[axis],
+    );
+  const distance = (part: Part) => {
+    const point = midpoint(part);
+    return Math.hypot(...point.map((value, axis) => value - center[axis]));
+  };
+  const structural: string[] = [];
+  const muscles: Part[] = [];
+  for (const part of atlas.parts) {
+    if (own.has(part.id) || !nearby(part)) continue;
+    if (
+      part.system === "skeletal" ||
+      part.system === "joints" ||
+      part.system === "connective" ||
+      (includeArteries && part.system === "arterial")
+    )
+      structural.push(part.id);
+    else if (part.system === "muscular") muscles.push(part);
+  }
+  muscles.sort((a, b) => distance(a) - distance(b));
+  return [...structural, ...muscles.slice(0, 28).map((part) => part.id)];
+}
+
 /** Neighborhood of each side, so a paired structure keeps context on the side that is off camera too. */
 export function studyContext(
   atlas: Atlas,
@@ -324,16 +384,26 @@ export function studyContext(
   const other = selected.filter((id) => !framedSet.has(id));
   if (other.length) clusters.push(other);
   const own = new Set(selected);
+  const selectedParts = atlas.parts.filter((part) => own.has(part.id));
+  const arterialStudy = selectedParts.some((part) => part.system === "arterial");
   const ids = new Set<string>();
   for (const cluster of clusters)
     for (const id of neighborhood(atlas, cluster))
       if (!own.has(id)) ids.add(id);
+  for (const id of regionalSystemContext(atlas, selected, arterialStudy))
+    ids.add(id);
 
   // Vessels are difficult to identify as isolated tubes. Keep the local bony
   // landmark layer, then add the closest organ pieces so the learner can read
   // a vessel's place in the chest, abdomen, or limb before rotating the model.
-  const selectedParts = atlas.parts.filter((part) => own.has(part.id));
-  if (selectedParts.some((part) => part.system === "arterial")) {
+  // Muscles and joint meshes make this layer visually noisy, so they stay out
+  // of artery study views.
+  if (arterialStudy) {
+    const partById = new Map(atlas.parts.map((part) => [part.id, part]));
+    for (const id of ids) {
+      const system = partById.get(id)?.system;
+      if (system === "muscular" || system === "joints") ids.delete(id);
+    }
     const center = [0, 0, 0];
     for (const part of selectedParts)
       for (let axis = 0; axis < 3; axis++)

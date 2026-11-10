@@ -12,12 +12,18 @@ import {
 import type { Catalog, Structure } from "@/lib/flashcards/types";
 
 /** Systems loaded as surrounding anatomy on cards. */
-const CONTEXT_SYSTEMS = new Set(["skeletal", "muscular", "connective"]);
+const CONTEXT_SYSTEMS = new Set([
+  "skeletal",
+  "muscular",
+  "connective",
+  "arterial",
+]);
 const NOT_CONTEXT = /tooth|gingiva|papillary/i;
 
 const HIGHLIGHT = "#36FE28";
 const BONE = SYSTEMS.find((system) => system.id === "skeletal")!.color;
 const MUSCLE_GHOST = SYSTEMS.find((system) => system.id === "muscular")!.color;
+const ARTERY = SYSTEMS.find((system) => system.id === "arterial")!.color;
 
 // These small foot bones need surrounding anatomy for orientation instead of an
 // isolated close-up. The bilateral third toe needs the full foot span; the
@@ -25,11 +31,12 @@ const MUSCLE_GHOST = SYSTEMS.find((system) => system.id === "muscular")!.color;
 const FULL_CONTEXT_FRAME_IDS = new Set(["distal-phalanx-of-third-toe"]);
 const REGIONAL_CONTEXT_FRAME_IDS = new Set([
   "intermediate-cuneiform-bone",
+  "patella",
   "proximal-phalanx-of-second-toe",
 ]);
 // The vomer sits deep within the nasal septum. Render its surrounding skull as
 // a light cutaway so learners can orient it without losing the highlight.
-const CUTAWAY_CARD_IDS = new Set(["vomer"]);
+const CUTAWAY_CARD_IDS = new Set(["vomer", "incus"]);
 
 interface ViewDirection {
   /** Name of this camera direction. */
@@ -212,6 +219,13 @@ async function load(host: HTMLElement, api: CardRendererApi) {
       depthWrite: false,
       side,
     }),
+    artery: new T.MeshStandardMaterial({
+      color: ARTERY,
+      roughness: 0.42,
+      metalness: 0.02,
+      envMapIntensity: DEFAULT_LIGHTING.environment,
+      side,
+    }),
     // Ghosted muscles draw in two passes so only their nearest surface is shaded,
     // giving one veil instead of many stacked translucent layers.
     ghostDepth: new T.MeshBasicMaterial({ colorWrite: false, side }),
@@ -306,6 +320,7 @@ async function load(host: HTMLElement, api: CardRendererApi) {
     v: ViewDirection,
     score = false,
     margin = 4,
+    minimum = 0.12,
   ) {
     const center = bounds.getCenter(new T.Vector3());
     const right = new T.Vector3().crossVectors(v.up, v.dir).normalize();
@@ -324,7 +339,7 @@ async function load(host: HTMLElement, api: CardRendererApi) {
     const extent = score
       ? bounds.getSize(new T.Vector3()).length()
       : Math.max(w, h) * margin;
-    const size = Math.max(0.12, extent);
+    const size = Math.max(minimum, extent);
     const distance = size / 2 / Math.tan(T.MathUtils.degToRad(camera.fov / 2));
     camera.position.copy(center).addScaledVector(v.dir, distance);
     camera.up.copy(v.up);
@@ -344,13 +359,20 @@ async function load(host: HTMLElement, api: CardRendererApi) {
     const own = new Set(s.parts);
     const bones: T.Mesh[] = [];
     const muscles: T.Mesh[] = [];
+    const arteries: T.Mesh[] = [];
     for (const [id, mesh] of meshes) {
       const p = parts.get(id)!;
       if (own.has(id) || !region.intersectsBox(box(p))) continue;
       if (p.system === "skeletal") bones.push(mesh);
       else if (isMuscle(p)) muscles.push(mesh);
+      else if (s.category === "artery" && p.system === "arterial")
+        arteries.push(mesh);
     }
-    return { bones, muscles: s.category === "muscle" ? muscles : [] };
+    return {
+      bones,
+      muscles: s.category === "muscle" ? muscles : [],
+      arteries,
+    };
   }
 
   function show(visible: T.Mesh[], assign: (m: T.Mesh) => T.Material) {
@@ -382,26 +404,27 @@ async function load(host: HTMLElement, api: CardRendererApi) {
     // stays a close-up of one side, because the other hand would shrink it to a speck.
     const framed = FULL_CONTEXT_FRAME_IDS.has(s.id)
       ? subject
-      : REGIONAL_CONTEXT_FRAME_IDS.has(s.id)
+      : s.category === "artery" || REGIONAL_CONTEXT_FRAME_IDS.has(s.id)
         ? regionalFrame(one)
       : longest(subject) <= longest(one) * 4
         ? subject
         : one;
     const targets = s.parts.map((p) => meshes.get(p)!).filter(Boolean);
     const targetSet = new Set(targets);
-    const { bones, muscles } = context(s, framed, one);
+    const { bones, muscles, arteries } = context(s, framed, one);
     const cutaway = CUTAWAY_CARD_IDS.has(s.id);
-    const frameMargin = cutaway ? 1.8 : 4;
+    const frameMargin = s.id === "incus" ? 1.3 : cutaway ? 1.8 : 4;
+    const frameMinimum = s.id === "incus" ? 0.025 : 0.12;
     const idMaterial = (m: T.Mesh) =>
       targetSet.has(m) ? material.idTarget : material.idOccluder;
 
     // Score each direction by how much of the structure is visible, both behind
     // the ghosted muscles and with them treated as opaque.
     const scored = VIEWS.map((v) => {
-      frame(framed, v, true, frameMargin);
-      show([...targets, ...bones, ...muscles], idMaterial);
+      frame(framed, v, true, frameMargin, frameMinimum);
+      show([...targets, ...bones, ...muscles, ...arteries], idMaterial);
       const unobstructed = visiblePixels();
-      show([...targets, ...bones], idMaterial);
+      show([...targets, ...bones, ...arteries], idMaterial);
       const throughGhost = visiblePixels();
       return { v, score: (unobstructed * 0.5 + throughGhost * 0.5) * v.bias };
     }).sort((a, b) => b.score - a.score);
@@ -422,13 +445,17 @@ async function load(host: HTMLElement, api: CardRendererApi) {
     const marked = s.category === "muscle" ? material.highlight : material.mark;
     const out: RenderedView[] = [];
     for (const { v } of chosen) {
-      frame(framed, v, false, frameMargin);
-      show([...targets, ...bones, ...muscles], (m) => {
+      frame(framed, v, false, frameMargin, frameMinimum);
+      show([...targets, ...bones, ...muscles, ...arteries], (m) => {
         m.renderOrder = ghosts.has(m) ? 1 : 0;
         return targetSet.has(m)
           ? marked
+          : arteries.includes(m)
+            ? material.artery
           : cutaway
             ? material.boneGhost
+            : s.category === "artery"
+              ? material.boneGhost
           : ghosts.has(m)
             ? material.ghostDepth
             : material.bone;

@@ -84,6 +84,12 @@ export default function AnatomyScene({
       controls = new OrbitControls(camera, renderer.domElement);
     camera.position.set(1.4, 1.05, 3.6);
     controls.target.set(0, 0.85, 0);
+    // Keep zoom explicit: card explorers live in an iframe, where relying on
+    // the control defaults can let wheel gestures scroll the surrounding page.
+    controls.enableZoom = true;
+    controls.zoomSpeed = 1.1;
+    controls.touches.TWO = T.TOUCH.DOLLY_PAN;
+    controls.mouseButtons.MIDDLE = T.MOUSE.DOLLY;
     controls.enableDamping = true;
     controls.dampingFactor = 0.085;
     controls.minDistance = 0.07;
@@ -91,6 +97,14 @@ export default function AnatomyScene({
     controls.maxPolarAngle = Math.PI * 0.96;
     controls.addEventListener("change", () => {
       dirty = true;
+    });
+    const retainWheelZoom = (event: WheelEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    renderer.domElement.style.touchAction = "none";
+    renderer.domElement.addEventListener("wheel", retainWheelZoom, {
+      passive: false,
     });
     const pmrem = new T.PMREMGenerator(renderer),
       room = new RoomEnvironment();
@@ -354,6 +368,28 @@ export default function AnatomyScene({
     veilDepth.onBeforeCompile = veilCompile;
     veilColor.onBeforeCompile = veilCompile;
     materials.push(veilDepth, veilColor);
+    // Arteries commonly run behind bones. The skeletal context gets the same
+    // depth-aware translucent treatment in artery study views, so the vessel
+    // stays visible without losing its anatomical landmark layer.
+    const skeletonVeilDepth = new T.MeshBasicMaterial({
+      colorWrite: false,
+      side: T.DoubleSide,
+    });
+    const skeletonVeilColor = new T.MeshStandardMaterial({
+      color: SYSTEMS.find((s) => s.id === "skeletal")!.color,
+      roughness: 0.72,
+      metalness: 0.02,
+      envMapIntensity: lightingRef.current.environment,
+      transparent: true,
+      opacity: 0.3,
+      depthWrite: false,
+      depthFunc: T.EqualDepth,
+      side: T.DoubleSide,
+    });
+    envMaterials.push(skeletonVeilColor);
+    skeletonVeilDepth.onBeforeCompile = veilCompile;
+    skeletonVeilColor.onBeforeCompile = veilCompile;
+    materials.push(skeletonVeilDepth, skeletonVeilColor);
     const veils: T.Mesh[] = [];
     let loaded = 0;
     const loadChunk = async (ci: number) => {
@@ -410,6 +446,16 @@ export default function AnatomyScene({
             const veil = new T.Mesh(geometry, material);
             veil.frustumCulled = false;
             veil.renderOrder = material === veilDepth ? 1 : 2;
+            veil.visible = false;
+            scene.add(veil);
+            veils.push(veil);
+          }
+        }
+        if (system === "skeletal") {
+          for (const material of [skeletonVeilDepth, skeletonVeilColor]) {
+            const veil = new T.Mesh(geometry, material);
+            veil.frustumCulled = false;
+            veil.renderOrder = material === skeletonVeilDepth ? 1 : 2;
             veil.visible = false;
             scene.add(veil);
             veils.push(veil);
@@ -639,6 +685,11 @@ export default function AnatomyScene({
           selection = new Set(s.selected),
           context = new Set(s.context ?? []),
           removed = new Set(s.removed);
+        const arterialStudy =
+          s.isolate &&
+          atlas.parts.some(
+            (part) => selection.has(part.id) && part.system === "arterial",
+          );
         let showVeil = false;
         const visibleParts = atlas.parts.filter((p) =>
           s.isolate
@@ -698,6 +749,8 @@ export default function AnatomyScene({
                 : context.has(p.id)
                   ? p.system === "muscular"
                     ? 0.65
+                    : arterialStudy && p.system === "skeletal"
+                      ? 0.65
                     : 1
                   : 0
               : visible.has(p.system) || selected
@@ -816,7 +869,7 @@ export default function AnatomyScene({
                 (2 * Math.tan(T.MathUtils.degToRad(camera.fov / 2)))) *
                 // Study views retain a little more of the surrounding region,
                 // so the focused structure reads in anatomical context.
-                (s.context?.length ? (arterialStudy ? 2.35 : 1.7) : 1.35),
+                (s.context?.length ? (arterialStudy ? 1.12 : 0.88) : 1.35),
             );
             controls.maxDistance = Math.max(40, distance * 2);
             controls.target.copy(center);
@@ -909,6 +962,7 @@ export default function AnatomyScene({
       abort.abort();
       cancelAnimationFrame(frame);
       observer.disconnect();
+      renderer.domElement.removeEventListener("wheel", retainWheelZoom);
       controls.dispose();
       geometries.forEach((g) => g.dispose());
       materials.forEach((m) => m.dispose());
