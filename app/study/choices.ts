@@ -59,14 +59,15 @@ function shuffle<T>(list: readonly T[], rand: () => number) {
 }
 
 /**
- * Four Latin names: the highlighted structure and distractors from the deck,
- * filled from the catalogue when the deck is smaller than a question.
+ * Latin names: the highlighted structure and distractors from the deck,
+ * filled from the catalogue when the deck has too few distinct answers.
  */
 export function buildChoices(
   correct: ChoiceOption,
   deck: readonly ChoiceOption[],
   catalog: readonly ChoiceOption[],
   seed: string,
+  count = CHOICE_COUNT,
 ): ChoiceOption[] {
   const correctKey = choiceKey(correct.label);
   const seenIds = new Set<string>([correct.id]);
@@ -75,7 +76,7 @@ export function buildChoices(
   const rand = mulberry32(hash(`${seed}:${correct.id}`));
 
   const take = (source: readonly ChoiceOption[], sameCategory: boolean) => {
-    if (seenIds.size >= CHOICE_COUNT) return;
+    if (seenIds.size >= count) return;
     const candidates = source.filter((item) => {
       if (seenIds.has(item.id)) return false;
       if (sameCategory && item.category !== correct.category) return false;
@@ -83,7 +84,7 @@ export function buildChoices(
       return key.length > 0 && !seenLabels.has(key);
     });
     for (const item of shuffle(candidates, rand)) {
-      if (seenIds.size >= CHOICE_COUNT) break;
+      if (seenIds.size >= count) break;
       const key = choiceKey(item.label);
       if (seenLabels.has(key)) continue;
       seenIds.add(item.id);

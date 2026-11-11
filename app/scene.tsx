@@ -800,7 +800,18 @@ export default function AnatomyScene({
         : "";
       if (isolateKey !== lastIsolate || (s.isolate && moving)) {
         if (s.isolate) {
-          const frameIds = new Set(s.frame?.length ? s.frame : s.selected);
+          // In a study view, the original target is normally the right camera
+          // frame. Once exploded, all visible nearby structures need to be
+          // included so the separated anatomy remains on screen.
+          const frameIds = new Set(
+            amount > 0.05
+              ? atlas.parts
+                  .filter((_, i) => data[i * 4 + 3] > 0.5)
+                  .map((part) => part.id)
+              : s.frame?.length
+                ? s.frame
+                : s.selected,
+          );
           const box = new T.Box3();
           atlas.parts.forEach((p, i) => {
             if (frameIds.has(p.id))

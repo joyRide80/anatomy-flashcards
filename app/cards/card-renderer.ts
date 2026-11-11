@@ -10,6 +10,7 @@ import {
   type Part,
 } from "../anatomy";
 import type { Catalog, Structure } from "@/lib/flashcards/types";
+import { vertebralKind } from "@/lib/flashcards/vertebrae";
 
 /** Systems loaded as surrounding anatomy on cards. */
 const CONTEXT_SYSTEMS = new Set([
@@ -77,7 +78,7 @@ export interface CardRendererApi {
   ids(): string[];
   render(
     id: string,
-    options?: { views?: number; size?: number },
+    options?: { views?: number; size?: number; isolatedVertebra?: boolean },
   ): Promise<RenderedView[]>;
 }
 declare global {
@@ -398,6 +399,7 @@ async function load(host: HTMLElement, api: CardRendererApi) {
   api.render = async (id, options = {}) => {
     const s = structures.get(id);
     if (!s) throw new Error(`Unknown structure ${id}`);
+    const isolatedVertebra = !!options.isolatedVertebra && vertebralKind(s) !== null;
     const one = meshBox(s.focus.length ? s.focus : s.parts);
     const subject = meshBox(s.parts);
     // Both sides share the picture when they fit in the usual frame. A fingertip
@@ -411,10 +413,14 @@ async function load(host: HTMLElement, api: CardRendererApi) {
         : one;
     const targets = s.parts.map((p) => meshes.get(p)!).filter(Boolean);
     const targetSet = new Set(targets);
-    const { bones, muscles, arteries } = context(s, framed, one);
+    // Name practice tests the shape of one vertebra; neighboring ribs and
+    // vertebrae would reveal its location before the learner studies the bone.
+    const { bones, muscles, arteries } = isolatedVertebra
+      ? { bones: [], muscles: [], arteries: [] }
+      : context(s, framed, one);
     const cutaway = CUTAWAY_CARD_IDS.has(s.id);
-    const frameMargin = s.id === "incus" ? 1.3 : cutaway ? 1.8 : 4;
-    const frameMinimum = s.id === "incus" ? 0.025 : 0.12;
+    const frameMargin = isolatedVertebra ? 1.35 : s.id === "incus" ? 1.3 : cutaway ? 1.8 : 4;
+    const frameMinimum = isolatedVertebra ? 0.075 : s.id === "incus" ? 0.025 : 0.12;
     const idMaterial = (m: T.Mesh) =>
       targetSet.has(m) ? material.idTarget : material.idOccluder;
 
@@ -429,7 +435,13 @@ async function load(host: HTMLElement, api: CardRendererApi) {
       return { v, score: (unobstructed * 0.5 + throughGhost * 0.5) * v.bias };
     }).sort((a, b) => b.score - a.score);
 
-    const chosen = [scored[0]];
+    // A superior view exposes the body, vertebral foramen, and processes that
+    // distinguish individual vertebrae. Make it the lead image for their
+    // isolated study cards; the second image remains the best complementary view.
+    const superior = VIEWS.find((v) => v.name === "superior")!;
+    const chosen = isolatedVertebra
+      ? [{ v: superior, score: Number.POSITIVE_INFINITY }]
+      : [scored[0]];
     for (const candidate of scored.slice(1)) {
       if (chosen.length >= (options.views ?? 2)) break;
       const distinct = chosen.every(
@@ -448,10 +460,9 @@ async function load(host: HTMLElement, api: CardRendererApi) {
       frame(framed, v, false, frameMargin, frameMinimum);
       show([...targets, ...bones, ...muscles, ...arteries], (m) => {
         m.renderOrder = ghosts.has(m) ? 1 : 0;
-        return targetSet.has(m)
-          ? marked
-          : arteries.includes(m)
-            ? material.artery
+        if (targetSet.has(m)) return isolatedVertebra ? material.bone : marked;
+        return arteries.includes(m)
+          ? material.artery
           : cutaway
             ? material.boneGhost
             : s.category === "artery"

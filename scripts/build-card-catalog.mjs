@@ -24,9 +24,9 @@ const MUSCLE_OUTSIDE_MUSCULAR =
   /^(fibularis|tibialis|subscapularis|levator scapulae|tensor fasciae latae)/i;
 const LIGAMENT = /ligament|interosseous membrane|thyrohyoid membrane/i;
 const JOINT_STRUCTURE = /capsule|meniscus|\bdisc\b|labrum|symphysis/i;
-// A deliberately compact first vascular deck. These are the principal systemic
-// arteries learners encounter when orienting themselves through the body.
-const MAJOR_ARTERIES = new Set([
+// Named arteries with atlas meshes and Latin terms selected for study cards.
+// Small segmental branches remain in the 3D atlas without becoming cards.
+const CARD_ARTERIES = new Set([
   "ascending aorta",
   "arch of aorta",
   "descending thoracic aorta",
@@ -47,12 +47,50 @@ const MAJOR_ARTERIES = new Set([
   "anterior tibial artery",
   "posterior tibial artery",
   "dorsalis pedis artery",
+  "celiac trunk",
+  "superior mesenteric artery",
+  "inferior mesenteric artery",
+  "renal artery",
+  "splenic artery",
+  "common hepatic artery",
+  "hepatic artery proper",
+  "ileocolic artery",
+  "middle colic artery",
+  "superior rectal artery",
+  "internal thoracic artery",
+  "posterior intercostal arteries",
+  "superior epigastric artery",
+  "inferior epigastric artery",
+  "vertebral artery",
+  "basilar artery",
+  "anterior cerebral artery",
+  "anterior communicating artery",
+  "posterior communicating artery",
+  "ophthalmic artery",
+  "inferior thyroid artery",
+  "thyrocervical trunk",
+  "costocervical trunk",
+  "suprascapular artery",
+  "deep brachial artery",
+  "common interosseous artery",
+  "anterior interosseous artery",
+  "deep palmar arch",
+  "subscapular artery",
+  "thoracodorsal artery",
+  "circumflex scapular artery",
+  "anterior circumflex humeral artery",
+  "posterior circumflex humeral artery",
+  "lateral circumflex femoral artery",
+  "descending genicular artery",
+  "lateral plantar artery",
+  "medial plantar artery",
+  "plantar arch",
 ]);
 
 function category(part, base) {
   if (EXCLUDE.test(part.name) || EXCLUDE.test(base)) return null;
   if (part.system === "arterial")
-    return MAJOR_ARTERIES.has(base) ? "artery" : null;
+    return CARD_ARTERIES.has(base) ? "artery" : null;
   if (part.system === "joints") {
     if (JOINT_STRUCTURE.test(part.name)) return "joint";
     if (/ligament|membrane|oblique cord/i.test(part.name)) return "ligament";

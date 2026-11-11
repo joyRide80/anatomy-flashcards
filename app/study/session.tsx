@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Volume2 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { formatInterval, introduce, nextDue, pickNext, schedule } from "@/lib/srs";
 import { studyDay, type LearningEvent } from "@/lib/flashcards/learning-model";
 import { normalizeLatin } from "@/lib/flashcards/latin";
-import type { Catalog, Deck, DeckProgress, Grade, ReviewLog } from "@/lib/flashcards/types";
+import type { CardImage, Catalog, Deck, DeckProgress, Grade, ReviewLog } from "@/lib/flashcards/types";
 import { ChoiceList } from "./choice";
 import { buildChoices, type Game } from "./choices";
-import { canSpeak, prepareVoices, speakTerms, stopSpeaking } from "./speech";
 import { SwipeCard, type Recall } from "./swipe-card";
 import { ExplorerOverlay, Plate, capitalize, catalogMaps, explorerHref, latinName } from "./shared";
-import { categoryLabel, deckName, t, type StudyLanguage } from "./language";
+import { categoryLabel, deckName, t, vertebralBoneName, type StudyLanguage } from "./language";
 import { structureName } from "./structure-glossary";
+import { VERTEBRAL_DECK_ID, vertebralKind } from "@/lib/flashcards/vertebrae";
+import isolatedVertebralImages from "@/public/cards/vertebrae/catalog.json";
+
+const vertebralImages: Record<string, CardImage[]> = isolatedVertebralImages;
 
 function currentDay(p: DeckProgress): DeckProgress {
   const day = studyDay();
@@ -27,9 +30,6 @@ function RevealedTerm({
   meaning,
   note,
   members,
-  audible,
-  speaking,
-  onToggleSpeak,
   language,
 }: {
   label: string;
@@ -37,33 +37,11 @@ function RevealedTerm({
   meaning: string;
   note?: string;
   members?: string;
-  audible: boolean;
-  speaking: boolean;
-  onToggleSpeak: () => void;
   language: StudyLanguage;
 }) {
   return (
     <>
-      <h3 className="latin">
-        {label}
-        {audible && (
-          <button
-            type="button"
-            className="speak"
-            aria-label={speaking ? "Stop pronunciation" : "Listen"}
-            aria-pressed={speaking}
-            onPointerDown={(e) => {
-              // iOS treats click as too late for speechSynthesis.
-              if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
-              e.preventDefault();
-              onToggleSpeak();
-            }}
-            onClick={onToggleSpeak}
-          >
-            <Volume2 aria-hidden="true" />
-          </button>
-        )}
-      </h3>
+      <h3 className="latin">{label}</h3>
       {normalizeLatin(label) !== normalizeLatin(official) && (
         <p className="official">
           <span>Terminologia Anatomica</span> {official}
@@ -131,11 +109,9 @@ export function Session({
   const [saveAttempt, setSaveAttempt] = useState(0);
   const savingRef = useRef(false);
   const pendingEvent = useRef<LearningEvent | null>(null);
-  const [speaking, setSpeaking] = useState(false);
   const [explore, setExplore] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
   const pickedRef = useRef<string | null>(null);
-  const audible = canSpeak();
 
   const newRemaining = Math.max(0, deck.newPerDay - progress.newToday.count);
   const next = useMemo(
@@ -144,6 +120,17 @@ export function Session({
   );
   const structure = next?.structure;
   const item = structure ? itemById.get(structure.id) : undefined;
+  const kind = deck.id === VERTEBRAL_DECK_ID && structure ? vertebralKind(structure) : null;
+  const meaning = structure
+    ? kind
+      ? vertebralBoneName(language, kind)
+      : structureName(structure, language)
+    : "";
+  const cardImages = structure
+    ? kind
+      ? (vertebralImages[structure.id] ?? structure.images)
+      : structure.images
+    : [];
   const card = structure ? progress.cards[structure.id] : undefined;
   // Each card is recall or multiple choice, chosen once so a re-render cannot switch it.
   const structureId = structure?.id;
@@ -155,7 +142,7 @@ export function Session({
   let game: Game = gamePick.game;
   if (!structureId) game = "recall";
   else if (gamePick.key !== gameKey) {
-    game = Math.random() < 0.5 ? "choice" : "recall";
+    game = deck.id === VERTEBRAL_DECK_ID || Math.random() < 0.5 ? "choice" : "recall";
     setGamePick({ key: gameKey, game });
   }
   const deckPool = useMemo(
@@ -196,8 +183,9 @@ export function Session({
       deckPool,
       catalogPool,
       `${structure.id}:${round}`,
+      kind ? 5 : 4,
     );
-  }, [game, structure, item, deckPool, catalogPool, round]);
+  }, [game, structure, item, deckPool, catalogPool, round, kind]);
 
   // Reviews rotate through the rendered views so the shape is learned, not one picture.
   const view = viewChoice && viewChoice.id === structure?.id ? viewChoice.index : (card?.reps ?? 0);
@@ -208,27 +196,6 @@ export function Session({
     const timer = setInterval(() => setNow(Date.now()), 15_000);
     return () => clearInterval(timer);
   }, [next]);
-
-  useEffect(() => {
-    prepareVoices();
-    return () => stopSpeaking();
-  }, []);
-
-  const hear = useCallback(
-    (latin: string, meaning: string, force = false) => {
-      speakTerms(latin, meaning, language, setSpeaking, force);
-    },
-    [language],
-  );
-
-  const toggleSpeak = useCallback(() => {
-    if (speaking) {
-      stopSpeaking();
-      setSpeaking(false);
-    } else if (item && structure) {
-      hear(item.label, structureName(structure, language), true);
-    }
-  }, [speaking, item, structure, hear, language]);
 
   const commit = useCallback(
     async (_updated: DeckProgress, id: string, log?: ReviewLog) => {
@@ -359,8 +326,8 @@ export function Session({
       if (!next || !structure) return;
       if (game === "choice") {
         if (e.repeat) return;
-        const digit = "1234".indexOf(e.key);
-        const letter = "abcd".indexOf(e.key.toLowerCase());
+        const digit = "12345".indexOf(e.key);
+        const letter = "abcde".indexOf(e.key.toLowerCase());
         const index = digit >= 0 ? digit : letter;
         if (!picked && index >= 0) {
           const option = options[index];
@@ -372,9 +339,6 @@ export function Session({
         if ((e.key === " " || e.key === "Enter") && picked) {
           e.preventDefault();
           advanceChoice();
-        } else if ((e.key === "l" || e.key === "L") && audible && item && picked) {
-          e.preventDefault();
-          toggleSpeak();
         }
         return;
       }
@@ -390,14 +354,6 @@ export function Session({
           e.preventDefault();
           setNudge("again");
         }
-      } else if (
-        (e.key === "l" || e.key === "L") &&
-        audible &&
-        item &&
-        (next.kind === "learn" || revealed)
-      ) {
-        e.preventDefault();
-        toggleSpeak();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -407,10 +363,7 @@ export function Session({
     next,
     revealed,
     learn,
-    audible,
     structure,
-    item,
-    toggleSpeak,
     game,
     picked,
     options,
@@ -419,14 +372,8 @@ export function Session({
   ]);
 
   const showAnswer = game === "choice" ? picked !== null : next?.kind === "learn" || revealed;
-  const official = structure ? latinName(structure) : "";
+  const official = kind ? item?.label ?? "" : structure ? latinName(structure) : "";
 
-  useEffect(() => {
-    return () => {
-      stopSpeaking();
-      setSpeaking(false);
-    };
-  }, [structure?.id]);
   const upcoming = nextDue(progress.cards);
   const canSwipe = next?.kind === "practice" && revealed && !!card;
   const rememberedIn = card
@@ -513,7 +460,8 @@ export function Session({
           onDecide={grade}
         >
           <Plate
-            structure={structure}
+            structure={{ ...structure, images: cardImages }}
+            isolated={!!kind}
             view={view}
             explore={showAnswer ? () => setExplore(true) : undefined}
             onView={game === "choice" || showAnswer ? setView : undefined}
@@ -532,7 +480,9 @@ export function Session({
                 <p className="eyebrow-serif">{categoryLabel(language, structure.category)}</p>
                 {!picked ? (
                   <>
-                    <h3 className="prompt">{t(language, "whichStructure")}</h3>
+                    <h3 className="prompt">
+                      {t(language, kind ? "vertebraQuestion" : "whichStructure")}
+                    </h3>
                     <p className="hint">{t(language, "chooseLatin")}</p>
                   </>
                 ) : (
@@ -546,7 +496,7 @@ export function Session({
                     <RevealedTerm
                       label={item.label}
                       official={official}
-                      meaning={structureName(structure, language)}
+                      meaning={meaning}
                       note={item.note}
                       members={
                         structure.members
@@ -557,9 +507,6 @@ export function Session({
                           .filter(Boolean)
                           .join(", ") || undefined
                       }
-                      audible={audible}
-                      speaking={speaking}
-                      onToggleSpeak={toggleSpeak}
                       language={language}
                     />
                     <p className="hint">{choiceReturn}</p>
@@ -597,7 +544,7 @@ export function Session({
                 <RevealedTerm
                   label={item.label}
                   official={official}
-                  meaning={structureName(structure, language)}
+                  meaning={meaning}
                   note={item.note}
                   members={
                     structure.members
@@ -608,9 +555,6 @@ export function Session({
                       .filter(Boolean)
                       .join(", ") || undefined
                   }
-                  audible={audible}
-                  speaking={speaking}
-                  onToggleSpeak={toggleSpeak}
                   language={language}
                 />
                 {next!.kind === "learn" && (
@@ -633,9 +577,10 @@ export function Session({
           open={explore}
           src={explorerHref(
             structure,
-            structure.images[view % Math.max(1, structure.images.length)]?.view,
+            cardImages[view % Math.max(1, cardImages.length)]?.view,
+            { skeletonOnly: deck.id === VERTEBRAL_DECK_ID },
           )}
-          title={structureName(structure, language)}
+          title={meaning}
           onClose={() => setExplore(false)}
         />
       )}

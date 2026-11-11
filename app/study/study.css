@@ -1170,12 +1170,16 @@ body:has(.deck-menu) .study {
 .explorer-overlay {
   position: fixed;
   inset: 0;
+  transform-origin: top left;
   z-index: 50;
   display: flex;
   flex-direction: column;
   height: 100dvh;
   overflow: hidden;
   overscroll-behavior: none;
+}
+.explorer-overlay[hidden] {
+  display: none;
 }
 body:has(.explorer-overlay:not([hidden])) {
   overflow: hidden;
@@ -1311,37 +1315,6 @@ body:has(.explorer-overlay:not([hidden])) .study:not(.explorer-overlay) {
   letter-spacing: -0.01em;
   color: var(--vermilion);
   overflow-wrap: anywhere;
-}
-.latin .speak {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 0.72em;
-  height: 0.72em;
-  min-width: 32px;
-  min-height: 32px;
-  margin-left: 0.16em;
-  padding: 0;
-  border-radius: 999px;
-  vertical-align: middle;
-  color: var(--ink-2);
-  line-height: 0;
-  position: relative;
-  top: -0.04em;
-}
-.latin .speak svg {
-  width: 0.46em;
-  height: 0.46em;
-  min-width: 18px;
-  min-height: 18px;
-}
-.latin .speak:hover {
-  color: var(--ink);
-  background: #1d242710;
-}
-.latin .speak[aria-pressed="true"] {
-  color: var(--ink);
-  background: #46637e18;
 }
 .official {
   margin: 0;

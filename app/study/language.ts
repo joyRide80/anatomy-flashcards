@@ -1,4 +1,5 @@
 import type { Category } from "@/lib/flashcards/types";
+import type { VertebralKind } from "@/lib/flashcards/vertebrae";
 
 export type StudyLanguage = "en" | "nb" | "da";
 
@@ -23,6 +24,7 @@ const copy: Record<StudyLanguage, Copy> = {
     newCard: "New card",
     whichStructure: "Which structure is highlighted?",
     chooseLatin: "Choose its Latin name.",
+    vertebraQuestion: "What is the name of this bone?",
     correct: "Correct",
     notThis: "Not this one",
     next: "Next",
@@ -76,6 +78,7 @@ const copy: Record<StudyLanguage, Copy> = {
     newCard: "Nytt kort",
     whichStructure: "Hvilken struktur er markert?",
     chooseLatin: "Velg det latinske navnet.",
+    vertebraQuestion: "Hva heter denne knokkelen?",
     correct: "Riktig",
     notThis: "Ikke denne",
     next: "Neste",
@@ -129,6 +132,7 @@ const copy: Record<StudyLanguage, Copy> = {
     newCard: "Nyt kort",
     whichStructure: "Hvilken struktur er fremhævet?",
     chooseLatin: "Vælg det latinske navn.",
+    vertebraQuestion: "Hvad hedder denne knogle?",
     correct: "Korrekt",
     notThis: "Ikke denne",
     next: "Næste",
@@ -174,6 +178,16 @@ const copy: Record<StudyLanguage, Copy> = {
 
 export function t(language: StudyLanguage, key: string) {
   return copy[language][key] ?? copy.en[key] ?? key;
+}
+
+const vertebralNames: Record<StudyLanguage, Record<VertebralKind, string>> = {
+  en: { atlas: "Atlas", axis: "Axis", cervical: "Cervical vertebra", thoracic: "Thoracic vertebra", lumbar: "Lumbar vertebra" },
+  nb: { atlas: "Atlas", axis: "Axis", cervical: "Nakkevirvel", thoracic: "Brystvirvel", lumbar: "Lendevirvel" },
+  da: { atlas: "Atlas", axis: "Axis", cervical: "Halshvirvel", thoracic: "Brysthvirvel", lumbar: "Lændehvirvel" },
+};
+
+export function vertebralBoneName(language: StudyLanguage, kind: VertebralKind) {
+  return vertebralNames[language][kind];
 }
 
 const categories: Record<StudyLanguage, Record<Category, string>> = {

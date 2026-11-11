@@ -2053,7 +2053,7 @@ h1 .edition {
   display: none;
 }
 .studio.study-explore .scene-caption {
-  bottom: max(20px, env(safe-area-inset-bottom));
+  bottom: max(116px, calc(20px + env(safe-area-inset-bottom)));
   color: #1a2428;
   font-size: 18px;
   font-weight: 600;
@@ -2079,7 +2079,7 @@ h1 .edition {
 }
 @media (max-width: 767px) {
   .studio.study-explore .scene-caption {
-    bottom: max(16px, env(safe-area-inset-bottom));
+    bottom: max(110px, calc(16px + env(safe-area-inset-bottom)));
     font-size: 18px;
     color: #1a2428;
   }
@@ -2388,6 +2388,39 @@ body,
 .loading,
 .bottom-dock {
   border-radius: 16px;
+}
+
+/* The explode control stays legible without competing with the anatomy. */
+.explode-dock {
+  position: absolute;
+  top: 82px;
+  left: 50%;
+  width: min(320px, calc(100% - 48px));
+  transform: translateX(-50%);
+}
+.explode-dock .explode-label {
+  display: block;
+  margin: 0 0 2px;
+  color: #3c4956;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+.explode-dock .explode-control [data-slot="slider"] {
+  padding: 8px 0;
+}
+@media (max-width: 767px) {
+  .explode-dock {
+    top: max(178px, calc(env(safe-area-inset-top) + 158px));
+    width: min(300px, calc(100% - 56px));
+  }
+  .studio.study-explore .explode-dock {
+    top: max(18px, env(safe-area-inset-top));
+  }
+}
+.studio.study-explore .explode-dock {
+  top: max(22px, env(safe-area-inset-top));
 }
 .layer-presets button,
 .top-actions button,

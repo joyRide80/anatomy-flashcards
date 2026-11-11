@@ -7,6 +7,7 @@ import {
 } from "../lib/flashcards/latin.ts";
 import { preferredLatinByPart } from "../lib/flashcards/catalog.ts";
 import { introduce, schedule, pickNext, LEARNING_STEPS } from "../lib/srs.ts";
+import { vertebralKind } from "../lib/flashcards/vertebrae.ts";
 
 const atlas = JSON.parse(
   await readFile(new URL("../public/models/atlas.json", import.meta.url)),
@@ -53,6 +54,29 @@ const files = (
 ).filter((f) => f.endsWith(".webp"));
 const orphans = files.filter((f) => !referenced.has(f));
 assert.deepEqual(orphans, [], "Unreferenced card images");
+
+// The vertebral deck has isolated views; the main catalogue keeps its
+// contextual views for the whole-body and custom decks.
+const isolated = JSON.parse(
+  await readFile(new URL("../public/cards/vertebrae/catalog.json", import.meta.url)),
+);
+const vertebralIds = catalog.structures.filter(vertebralKind).map((s) => s.id).sort();
+assert.deepEqual(Object.keys(isolated).sort(), vertebralIds);
+const isolatedFiles = new Set();
+for (const [id, images] of Object.entries(isolated)) {
+  assert.ok(images.length, `${id} has no isolated image`);
+  for (const image of images) {
+    assert.ok(image.src.startsWith(`/cards/vertebrae/${id}-`));
+    await access(new URL(`../public${image.src}`, import.meta.url));
+    isolatedFiles.add(image.src.split("/").pop());
+  }
+}
+assert.deepEqual(
+  (await readdir(new URL("../public/cards/vertebrae/", import.meta.url)))
+    .filter((name) => name.endsWith(".webp") && !isolatedFiles.has(name)),
+  [],
+  "Unreferenced isolated vertebra images",
+);
 
 // Latin matching.
 assert.equal(

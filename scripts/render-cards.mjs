@@ -1,9 +1,11 @@
 // Renders flash card images for every catalog structure into public/cards/img/.
 // Usage: node scripts/render-cards.mjs [--only id,id] [--force] [--views 2] [--size 720]
+//        node scripts/render-cards.mjs --vertebrae [--force]
 import { readFile, writeFile, mkdir, access, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 import { chromium } from "playwright";
+import { vertebralKind } from "../lib/flashcards/vertebrae.ts";
 
 const args = process.argv.slice(2);
 const option = (name, fallback) => {
@@ -12,12 +14,17 @@ const option = (name, fallback) => {
 };
 const only = option("only", "")?.split(",").filter(Boolean);
 const force = args.includes("--force");
+const isolatedVertebrae = args.includes("--vertebrae");
 const views = Number(option("views", 2));
 const size = Number(option("size", 720));
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const catalogUrl = new URL("../public/cards/catalog.json", import.meta.url);
-const imageDir = new URL("../public/cards/img/", import.meta.url);
+const vertebralViewsUrl = new URL("../public/cards/vertebrae/catalog.json", import.meta.url);
+const imageDir = new URL(
+  isolatedVertebrae ? "../public/cards/vertebrae/" : "../public/cards/img/",
+  import.meta.url,
+);
 await mkdir(imageDir, { recursive: true });
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 const exists = (url) =>
@@ -61,21 +68,31 @@ try {
   );
 
   const catalog = JSON.parse(await readFile(catalogUrl));
-  const ids = only?.length ? only : catalog.structures.map((s) => s.id);
+  const previousViews = isolatedVertebrae
+    ? await readFile(vertebralViewsUrl).then((b) => JSON.parse(b), () => ({}))
+    : {};
+  const ids = only?.length
+    ? only
+    : catalog.structures
+        .filter((s) => !isolatedVertebrae || vertebralKind(s))
+        .map((s) => s.id);
   const results = new Map();
   const started = Date.now();
   for (const [n, id] of ids.entries()) {
     const structure = catalog.structures.find((s) => s.id === id);
     if (!structure) throw new Error(`Unknown structure ${id}`);
+    if (isolatedVertebrae && !vertebralKind(structure))
+      throw new Error(`${id} is not a vertebra`);
+    const existing = isolatedVertebrae ? (previousViews[id] ?? []) : structure.images;
     const done = await Promise.all(
-      structure.images.map((img) =>
+      existing.map((img) =>
         exists(new URL(`../public${img.src}`, import.meta.url)),
       ),
     );
-    if (!force && structure.images.length && done.every(Boolean)) continue;
+    if (!force && existing.length && done.every(Boolean)) continue;
     const rendered = await page.evaluate(
       ([id, options]) => window.cardRenderer.render(id, options),
-      [id, { views, size }],
+      [id, { views, size, isolatedVertebra: isolatedVertebrae }],
     );
     const images = [];
     for (const { view, dataUrl } of rendered) {
@@ -84,9 +101,9 @@ try {
         new URL(file, imageDir),
         Buffer.from(dataUrl.split(",")[1], "base64"),
       );
-      images.push({ src: `/cards/img/${file}`, view });
+      images.push({ src: `/cards/${isolatedVertebrae ? "vertebrae" : "img"}/${file}`, view });
     }
-    for (const old of structure.images)
+    for (const old of existing)
       if (!images.some((img) => img.src === old.src))
         await rm(new URL(`../public${old.src}`, import.meta.url), {
           force: true,
@@ -97,10 +114,17 @@ try {
     );
   }
 
-  const latest = JSON.parse(await readFile(catalogUrl));
-  for (const s of latest.structures)
-    if (results.has(s.id)) s.images = results.get(s.id);
-  await writeFile(catalogUrl, JSON.stringify(latest) + "\n");
+  if (isolatedVertebrae) {
+    await writeFile(
+      vertebralViewsUrl,
+      JSON.stringify({ ...previousViews, ...Object.fromEntries(results) }) + "\n",
+    );
+  } else {
+    const latest = JSON.parse(await readFile(catalogUrl));
+    for (const s of latest.structures)
+      if (results.has(s.id)) s.images = results.get(s.id);
+    await writeFile(catalogUrl, JSON.stringify(latest) + "\n");
+  }
   console.log(
     `Rendered ${results.size} structures in ${Math.round((Date.now() - started) / 1000)}s.`,
   );

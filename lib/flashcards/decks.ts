@@ -1,4 +1,5 @@
 import type { Catalog, Category, Deck } from "./types";
+import { VERTEBRAL_DECK_ID, vertebralLatin, vertebralKind } from "./vertebrae.ts";
 
 export interface CuratedDeck extends Deck {
   description: string;
@@ -107,13 +108,13 @@ const DEFINITIONS: Definition[] = [
     ],
   },
   {
-    id: "default-columna-vertebralis",
+    id: VERTEBRAL_DECK_ID,
     name: "Vertebral column",
     category: "bone",
     region: "Trunk",
     description:
-      "Identify the cervical, thoracic and lumbar vertebrae, including atlas, axis, and the coccyx.",
-    ids: ["atlas", "axis", "coccyx"],
+      "Name each vertebra by its shape: atlas, axis, cervical, thoracic, or lumbar. Its number is not part of the answer.",
+    ids: ["atlas", "axis"],
     match: /vertebra$/,
   },
   {
@@ -348,47 +349,39 @@ const DEFINITIONS: Definition[] = [
   },
   {
     id: "major-arteries",
-    name: "Major arteries",
+    name: "Arteries of the body",
     category: "artery",
     region: "Whole body",
     featured: true,
     description:
-      "Trace the major systemic arteries from the aorta through the head, limbs, and feet.",
-    ids: [
-      "ascending-aorta",
-      "arch-of-aorta",
-      "descending-thoracic-aorta",
-      "abdominal-aorta",
-      "brachiocephalic-artery",
-      "common-carotid-artery",
-      "internal-carotid-artery",
-      "subclavian-artery",
-      "axillary-artery",
-      "brachial-artery",
-      "radial-artery",
-      "ulnar-artery",
-      "common-iliac-artery",
-      "internal-iliac-artery",
-      "external-iliac-artery",
-      "femoral-artery",
-      "popliteal-artery",
-      "anterior-tibial-artery",
-      "posterior-tibial-artery",
-      "dorsalis-pedis-artery",
-    ],
+      "Study the major arteries and their named branches across the head, trunk, arms, and legs.",
   },
   {
     id: "arteries-aortic-pathway",
-    name: "Aortic pathway",
+    name: "Aorta & trunk branches",
     category: "artery",
     region: "Trunk",
     description:
-      "Follow the aorta from its ascending portion through the thorax and abdomen.",
+      "Follow the aorta and identify its thoracic, abdominal, and organ branches.",
     ids: [
       "ascending-aorta",
       "arch-of-aorta",
       "descending-thoracic-aorta",
       "abdominal-aorta",
+      "posterior-intercostal-arteries",
+      "internal-thoracic-artery",
+      "superior-epigastric-artery",
+      "inferior-epigastric-artery",
+      "celiac-trunk",
+      "common-hepatic-artery",
+      "hepatic-artery-proper",
+      "splenic-artery",
+      "superior-mesenteric-artery",
+      "ileocolic-artery",
+      "middle-colic-artery",
+      "inferior-mesenteric-artery",
+      "superior-rectal-artery",
+      "renal-artery",
     ],
   },
   {
@@ -397,11 +390,20 @@ const DEFINITIONS: Definition[] = [
     category: "artery",
     region: "Head & neck",
     description:
-      "Learn the brachiocephalic trunk and the major carotid route toward the head.",
+      "Identify carotid, vertebral, cerebral, and thyroid arteries in the head and neck.",
     ids: [
       "brachiocephalic-artery",
       "common-carotid-artery",
       "internal-carotid-artery",
+      "vertebral-artery",
+      "basilar-artery",
+      "anterior-cerebral-artery",
+      "anterior-communicating-artery",
+      "posterior-communicating-artery",
+      "ophthalmic-artery",
+      "inferior-thyroid-artery",
+      "thyrocervical-trunk",
+      "costocervical-trunk",
     ],
   },
   {
@@ -410,13 +412,23 @@ const DEFINITIONS: Definition[] = [
     category: "artery",
     region: "Upper limb",
     description:
-      "Trace the principal arterial route from the subclavian artery to the forearm.",
+      "Trace the arterial route from the shoulder to the hand, including major branches.",
     ids: [
       "subclavian-artery",
       "axillary-artery",
       "brachial-artery",
       "radial-artery",
       "ulnar-artery",
+      "suprascapular-artery",
+      "subscapular-artery",
+      "circumflex-scapular-artery",
+      "thoracodorsal-artery",
+      "anterior-circumflex-humeral-artery",
+      "posterior-circumflex-humeral-artery",
+      "deep-brachial-artery",
+      "common-interosseous-artery",
+      "anterior-interosseous-artery",
+      "deep-palmar-arch",
     ],
   },
   {
@@ -425,7 +437,7 @@ const DEFINITIONS: Definition[] = [
     category: "artery",
     region: "Lower limb",
     description:
-      "Follow the major iliac, thigh, leg, and foot arteries from pelvis to dorsum of foot.",
+      "Follow iliac, thigh, leg, and foot arteries from pelvis to plantar arch.",
     ids: [
       "common-iliac-artery",
       "internal-iliac-artery",
@@ -435,6 +447,11 @@ const DEFINITIONS: Definition[] = [
       "anterior-tibial-artery",
       "posterior-tibial-artery",
       "dorsalis-pedis-artery",
+      "lateral-circumflex-femoral-artery",
+      "descending-genicular-artery",
+      "medial-plantar-artery",
+      "lateral-plantar-artery",
+      "plantar-arch",
     ],
   },
 ];
@@ -467,10 +484,15 @@ export function curatedDecks(catalog: Catalog): CuratedDeck[] {
       createdAt: 0,
       updatedAt: 0,
       newPerDay: 20,
-      items: structures.map((s) => ({
-        structureId: s.id,
-        label: (s.la[0] ?? s.en).replace(/\s*\[[^\]]*\]/g, ""),
-      })),
+      items: structures.map((s) => {
+        const kind = definition.id === VERTEBRAL_DECK_ID ? vertebralKind(s) : null;
+        return {
+          structureId: s.id,
+          label: kind
+            ? vertebralLatin[kind]
+            : (s.la[0] ?? s.en).replace(/\s*\[[^\]]*\]/g, ""),
+        };
+      }),
     };
   });
 }

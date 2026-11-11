@@ -9,7 +9,6 @@ import {
   ChevronRight,
   Focus,
   Info,
-  Layers3,
   Pause,
   RotateCcw,
   RotateCw,
@@ -117,7 +116,11 @@ export default function Home() {
           ?.split(",")
           .filter((id) => ids.includes(id)) ?? [];
       const frame = focus.length ? focus : ids;
-      const context = studyContext(data, ids, frame);
+      const skeletonOnly = fromStudy && params.get("skeleton") === "1";
+      const partById = new Map(data.parts.map((part) => [part.id, part]));
+      const context = studyContext(data, ids, frame).filter(
+        (id) => !skeletonOnly || partById.get(id)?.system !== "muscular",
+      );
       // Frame the study view around the selected structure *and* its immediate
       // anatomy, so the target does not appear abruptly cropped at the edge.
       const studyFrame = [...new Set([...frame, ...context])];
@@ -741,56 +744,28 @@ export default function Home() {
         </span>
         <span className="caption-line" />
       </div>
-      {!studyExplore && (
-        <div className="bottom-dock glass">
-          <Button
-            variant="ghost"
-            className="mobile-only dock-layers"
-            onClick={() => openPanel("layers")}
-            aria-label="Open system layers"
-          >
-            <Layers3 size={20} />
-            <span>Systems</span>
-          </Button>
-          <div className="explode-control">
-            <div className="explode-label">
-              <label id="explode-label">Explode anatomy</label>
-              <output>
-                {Math.round(state.explode * 100)}
-                <span>%</span>
-              </output>
-            </div>
-            <Slider
-              aria-labelledby="explode-label"
-              min={0}
-              max={100}
-              step={1}
-              value={[state.explode * 100]}
-              onValueChange={(v) =>
-                setState((s) => ({
-                  ...s,
-                  explode: (Array.isArray(v) ? v[0] : v) / 100,
-                  view: (Array.isArray(v) ? v[0] : v) > 80 ? "front" : s.view,
-                  rotate: false,
-                }))
-              }
-            />
-            <div className="slider-endpoints">
-              <span>Assembled</span>
-              <span>Every piece</span>
-            </div>
-          </div>
-          <Button
-            variant="ghost"
-            className="dock-reset"
-            onClick={reset}
-            aria-label="Assemble and reset"
-          >
-            <RotateCcw size={18} />
-            <span>Reset</span>
-          </Button>
+      <div className="explode-dock">
+        <div className="explode-control">
+          <span className="explode-label" id="explode-label">
+            Explode anatomy
+          </span>
+          <Slider
+            aria-labelledby="explode-label"
+            min={0}
+            max={100}
+            step={1}
+            value={[state.explode * 100]}
+            onValueChange={(v) =>
+              setState((s) => ({
+                ...s,
+                explode: (Array.isArray(v) ? v[0] : v) / 100,
+                view: (Array.isArray(v) ? v[0] : v) > 80 ? "front" : s.view,
+                rotate: false,
+              }))
+            }
+          />
         </div>
-      )}
+      </div>
       <footer className="studio-footer">
         <span>
           {state.knife ? (

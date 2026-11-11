@@ -15,7 +15,6 @@ import {
 import type { Catalog, Deck, DeckProgress } from "@/lib/flashcards/types";
 import { Library } from "./library";
 import { Session } from "./session";
-import { prepareVoices } from "./speech";
 import { STUDY_LANGUAGES, type StudyLanguage, t } from "./language";
 import { AppTabBar } from "../app-tab-bar";
 
@@ -57,7 +56,6 @@ export default function StudyPage() {
     document.title = "Anatomy Flashcards";
     const saved = window.localStorage.getItem("human-atlas:study-language");
     if (saved === "en" || saved === "nb" || saved === "da") setLanguage(saved);
-    prepareVoices();
     const controller = new AbortController();
     fetch("/cards/catalog.json", { signal: controller.signal })
       .then((r) => {

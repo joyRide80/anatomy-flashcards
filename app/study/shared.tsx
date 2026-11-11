@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import type { Catalog, Category, Structure } from "@/lib/flashcards/types";
@@ -26,7 +26,11 @@ export function catalogMaps(catalog: Catalog) {
 }
 
 /** Opens the 3D explorer on this structure, framed on the card's side, with nearby anatomy kept visible. */
-export function explorerHref(s: Structure, imageView?: string) {
+export function explorerHref(
+  s: Structure,
+  imageView?: string,
+  options: { skeletonOnly?: boolean } = {},
+) {
   const params = new URLSearchParams({
     parts: s.parts.join(","),
     name: s.en,
@@ -36,6 +40,7 @@ export function explorerHref(s: Structure, imageView?: string) {
   if (imageView === "anterior") params.set("view", "front");
   if (imageView === "posterior") params.set("view", "back");
   if (s.focus.length) params.set("focus", s.focus.join(","));
+  if (options.skeletonOnly) params.set("skeleton", "1");
   return `/atlas?${params}`;
 }
 
@@ -56,13 +61,39 @@ export function ExplorerOverlay({
   const [frameSrc, setFrameSrc] = useState<string | null>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  useLayoutEffect(() => {
+    if (!open || !window.visualViewport) return;
+    const viewport = window.visualViewport;
+    const overlay = dialog.current;
+    if (!overlay) return;
+
+    // Pinch zoom changes the visual viewport without changing the layout
+    // viewport used by position: fixed. Keep the exit control on screen and
+    // show the explorer at its normal size while the card remains magnified.
+    const positionOverlay = () => {
+      overlay.style.left = `${viewport.offsetLeft}px`;
+      overlay.style.top = `${viewport.offsetTop}px`;
+      overlay.style.width = `${viewport.width * viewport.scale}px`;
+      overlay.style.height = `${viewport.height * viewport.scale}px`;
+      overlay.style.transform = `scale(${1 / viewport.scale})`;
+    };
+    positionOverlay();
+    viewport.addEventListener("resize", positionOverlay);
+    viewport.addEventListener("scroll", positionOverlay);
+    return () => {
+      viewport.removeEventListener("resize", positionOverlay);
+      viewport.removeEventListener("scroll", positionOverlay);
+      overlay.style.removeProperty("left");
+      overlay.style.removeProperty("top");
+      overlay.style.removeProperty("width");
+      overlay.style.removeProperty("height");
+      overlay.style.removeProperty("transform");
+    };
+  }, [open]);
   useEffect(() => {
     if (!open) return;
     const previous = document.activeElement;
-    // A card may have been magnified on a small screen. Return the document to
-    // its origin and focus the exit affordance before handing off to the atlas.
-    window.scrollTo(0, 0);
-    dialog.current?.scrollTo(0, 0);
+    // Focus the exit affordance before handing off to the atlas.
     requestAnimationFrame(() => closeButton.current?.focus());
     const close = () => onCloseRef.current();
     const onKey = (e: KeyboardEvent) => {
@@ -142,6 +173,7 @@ export function Plate({
   explore,
   onView,
   praise = false,
+  isolated = false,
   language = "en",
 }: {
   structure: Structure;
@@ -151,6 +183,8 @@ export function Plate({
   onView?: (index: number) => void;
   /** A correct multiple-choice answer. Stamps the picture. */
   praise?: boolean;
+  /** The bone is shown alone rather than highlighted among surrounding anatomy. */
+  isolated?: boolean;
   language?: StudyLanguage;
 }) {
   const images = structure.images;
@@ -162,7 +196,7 @@ export function Plate({
           <img
             key={image.src}
             src={image.src}
-            alt={`Highlighted structure, ${viewName(language, image.view)} view`}
+            alt={`${isolated ? "Isolated vertebra" : "Highlighted structure"}, ${viewName(language, image.view)} view`}
             draggable={false}
           />
         ) : (

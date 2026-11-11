@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { curatedDecks } from "../lib/flashcards/decks.ts";
+import { vertebralKind, vertebralLatin } from "../lib/flashcards/vertebrae.ts";
 import {
   projectLearning,
   studyDay,
@@ -37,6 +38,25 @@ assert.ok(
   decks
     .find((d) => d.id === "all-bones")
     .items.some((i) => i.structureId === "humerus"),
+);
+const vertebralDeck = decks.find((d) => d.id === "default-columna-vertebralis");
+assert.ok(vertebralDeck);
+assert.equal(vertebralDeck.items.length, 24);
+assert.ok(!vertebralDeck.items.some((i) => i.structureId === "coccyx"));
+const structureById = new Map(catalog.structures.map((s) => [s.id, s]));
+for (const item of vertebralDeck.items) {
+  const kind = vertebralKind(structureById.get(item.structureId));
+  assert.ok(kind, `${item.structureId} has a vertebral name`);
+  assert.equal(item.label, vertebralLatin[kind]);
+}
+assert.deepEqual(
+  Object.fromEntries(
+    Object.values(vertebralLatin).map((label) => [
+      label,
+      vertebralDeck.items.filter((i) => i.label === label).length,
+    ]),
+  ),
+  { atlas: 1, axis: 1, "vertebra cervicalis": 5, "vertebra thoracica": 12, "vertebra lumbalis": 5 },
 );
 for (const id of [
   "arteries-aortic-pathway",

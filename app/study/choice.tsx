@@ -1,6 +1,6 @@
 import type { ChoiceOption } from "./choices";
 
-const LETTERS = ["A", "B", "C", "D"];
+const LETTERS = ["A", "B", "C", "D", "E"];
 
 export function ChoiceList({
   options,
